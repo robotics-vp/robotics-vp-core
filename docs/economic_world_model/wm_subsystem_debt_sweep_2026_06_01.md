@@ -91,6 +91,92 @@ python3 -m mypy --follow-imports=silent \
   scripts/runpod
 ```
 
+The second local debt-burn pass cleared the full `src/vision` static surface.
+This was perception/grounding seam hygiene only: optional PyTorch fallbacks,
+NAG/SceneIR metadata narrowing, NumPy scalar casts, and unused import/local
+cleanup. It did not run providers, train, write weights, or promote any visual
+surface.
+
+The following vision checks now pass:
+
+```bash
+python3 -m mypy --follow-imports=silent src/vision
+python3 -m ruff check src/vision
+python3 -m compileall src/vision -q
+python3 -m pytest \
+  tests/vision \
+  tests/test_nag_core.py \
+  tests/test_nag_lsd_integration.py \
+  tests/test_vision_backbone_projection_proof_of_life_smoke.py \
+  -q
+```
+
+The third local debt-burn pass cleared the full `src/vla` static surface. This
+was provider-adapter and advisory-scaffold hygiene only: optional torch fallback
+bases, Python 3.9-compatible annotations, MetaDINO optional model narrowing,
+RECAP optional feature handling, and teacher-runtime payload widening. It did
+not run OpenVLA, train, write weights, or promote teacher/runtime outputs.
+
+The following VLA checks now pass:
+
+```bash
+python3 -m ruff check src/vla
+python3 -m compileall src/vla -q
+python3 -m mypy --follow-imports=silent src/vla \
+  --show-error-codes --no-error-summary
+python3 -m pytest -q \
+  tests/test_vla_backend_policy.py \
+  tests/test_teacher_runtime.py \
+  tests/test_rollout_labeler.py \
+  tests/test_train_vla_recap_offline.py \
+  tests/test_vla_semantic_evidence.py
+```
+
+The fourth local debt-burn pass cleared the full `src/envs` static surface.
+This was environment/curriculum hygiene only: fixed-base dishwashing/workcell
+and LSD envs remain curriculum/regression producers, not G1 hardware or bipedal
+proof. The pass added missing annotations, honest PyBullet missing-stub ignores,
+default econ params for a demo path, and unused import/local cleanup.
+
+The following env checks now pass:
+
+```bash
+python3 -m ruff check src/envs
+python3 -m compileall src/envs -q
+python3 -m mypy --follow-imports=silent src/envs \
+  --show-error-codes --no-error-summary
+python3 -m pytest -q \
+  tests/envs \
+  tests/test_lsd3d_geometry.py \
+  tests/test_lsd_vector_scene_env.py \
+  tests/test_lsd_integration.py \
+  tests/test_workcell_paramount.py \
+  tests/test_env_regality_compliance.py \
+  tests/test_g1_primary_environment.py
+```
+
+The fifth local debt-burn pass cleared the full `src/rl` static surface. This
+was sampler/Hydra/PPO typing and lint hygiene only. It preserved reward math,
+loss semantics, and bounded advisory authority.
+
+The following RL checks now pass:
+
+```bash
+python3 -m ruff check src/rl
+python3 -m compileall src/rl -q
+python3 -m mypy --follow-imports=silent src/rl \
+  --show-error-codes --no-error-summary
+python3 -m pytest -q \
+  tests/test_weights.py \
+  tests/test_sampler_policy.py \
+  tests/test_train_sampler_policy.py \
+  tests/test_sampling_determinism_seeded.py \
+  tests/test_queue_dispatch_integration.py \
+  tests/test_online_queue_dispatch_integration.py \
+  tests/test_shadow_offline_rl.py \
+  tests/test_shadow_replay_policy.py
+```
+
 The residual debt is now full-repo static hygiene outside that narrowed gate.
 It should still be burned down, because these modules are lower-WM producers,
 trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
@@ -101,36 +187,28 @@ Current residual broad ruff:
 | Area | Count |
 | --- | ---: |
 | `scripts/` | 38 |
-| `src/vision/` | 34 |
-| `src/envs/` | 26 |
 | `src/process_reward/` | 20 |
 | `src/utils/` | 10 |
 | `src/analytics/` | 9 |
 | `src/hrl/` | 9 |
-| `src/vla/` | 9 |
 | `tests/` | 9 |
 | `src/orchestrator/` | 8 |
-| `src/rl/` | 8 |
 | other checked-in support surfaces | 86 |
-| **Total** | **266** |
+| **Total** | **189** |
 
 Current residual broad ruff by code:
 
 | Code | Meaning | Count | Disposition |
 | --- | --- | ---: | --- |
-| `F401` | unused imports | 180 | mostly safe mechanical cleanup |
-| `F841` | unused locals | 62 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
-| `F821` | undefined names | 9 | treat as bugs before mechanical cleanup |
-| other `E`/`F` rules | style/ambiguous names/bare except | 15 | mechanical except where exceptions hide provider/runtime failures |
+| `F401` | unused imports | 120 | mostly safe mechanical cleanup |
+| `F841` | unused locals | 48 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
+| `F821` | undefined names | 7 | treat as bugs before mechanical cleanup |
+| other `E`/`F` rules | style/ambiguous names/bare except | 14 | mechanical except where exceptions hide provider/runtime failures |
 
 Current residual full-repo mypy:
 
 | Area | Count |
 | --- | ---: |
-| `src/vision/` | 34 |
-| `src/vla/` | 22 |
-| `src/envs/` | 18 |
-| `src/rl/` | 15 |
 | `src/scene/` | 12 |
 | `src/motor_backend/` | 12 |
 | `src/replay/` | 8 |
@@ -143,21 +221,23 @@ Current residual full-repo mypy:
 | `src/evidence/` | 5 |
 | `src/policies/` | 5 |
 | other checked-in support surfaces | 40 |
-| **Total actual `error:` records** | **206** |
+| **Total actual `error:` records** | **117** |
 
 Current residual full-repo mypy by kind:
 
 | Kind | Count | Meaning |
 | --- | ---: | --- |
-| `arg-type` | 48 | interface drift and weak payload narrowing |
-| `assignment` | 45 | optional dependency/module typing, tensor/list reuse, schema mismatch |
-| `var-annotated` | 18 | untyped mutable containers |
-| `dict-item` | 15 | dicts typed too narrowly for receipt/config payloads |
-| `misc` | 13 | dynamic torch bases and optional provider call sites |
-| `attr-defined` | 12 | object payloads not narrowed before attribute access |
-| `union-attr` | 10 | optional values used without proof |
-| `no-redef` | 9 | conditional import/fallback patterns |
-| other codes | 36 | smaller call/index/import/override issues |
+| `arg-type` | 34 | interface drift and weak payload narrowing |
+| `assignment` | 31 | optional dependency/module typing, tensor/list reuse, schema mismatch |
+| `var-annotated` | 10 | untyped mutable containers |
+| `dict-item` | 9 | dicts typed too narrowly for receipt/config payloads |
+| `attr-defined` | 6 | object payloads not narrowed before attribute access |
+| `index` | 5 | weakly typed enum/list indices |
+| `return-value` | 4 | declared receipt/runtime outputs too narrow |
+| `import-untyped` | 3 | installed dependencies without stubs |
+| `operator` | 3 | narrowed tensor/optional arithmetic gaps |
+| `call-arg` | 3 | stale call signatures and constructor drift |
+| other codes | 12 | smaller optional/import/operator/override issues |
 
 Legacy/support-surface disposition:
 

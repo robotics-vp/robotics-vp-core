@@ -5,7 +5,7 @@ Wraps existing PyBullet-based environments (drawer+vase, dishwashing_arm)
 without changing their behavior.
 """
 
-from typing import Any, Dict, Optional, Tuple, Literal
+from typing import Any, Dict, List, Optional, Tuple, Literal
 
 from .base_engine import PhysicsBackend
 from src.envs.dishwashing_env import EpisodeInfoSummary
@@ -39,12 +39,12 @@ class PyBulletBackend(PhysicsBackend):
         self._env = env
         self._env_name = env_name
         self._summarize_fn = summarize_fn
-        self._info_history = []
+        self._info_history: List[Dict[str, Any]] = []
         self._episode_count = 0
 
         # Media references for datapack integration (mirrors Isaac backend)
-        self._media_refs = {}  # episode_id -> {"rgb_path": ..., "depth_path": ...}
-        self._current_episode_id = None
+        self._media_refs: Dict[str, Dict[str, str]] = {}  # episode_id -> refs
+        self._current_episode_id: Optional[str] = None
 
     @property
     def engine_type(self) -> Literal["pybullet", "isaac", "ue5"]:
@@ -76,19 +76,19 @@ class PyBulletBackend(PhysicsBackend):
 
         # Generate episode ID for datapack tracking
         import uuid
+
         self._current_episode_id = str(uuid.uuid4())
 
         # Check if env supports initial_state parameter
-        if initial_state is not None and hasattr(self._env, 'reset_with_state'):
-            obs, info = self._env.reset_with_state(initial_state)
+        if initial_state is not None and hasattr(self._env, "reset_with_state"):
+            obs, _info = self._env.reset_with_state(initial_state)
         else:
             result = self._env.reset()
             # Handle both old and new gym API
             if isinstance(result, tuple):
-                obs, info = result
+                obs, _info = result
             else:
                 obs = result
-                info = {}
 
         return obs
 
@@ -134,7 +134,10 @@ class PyBulletBackend(PhysicsBackend):
         # Try to use env-specific summarizer
         if self._env_name == "drawer_vase":
             try:
-                from src.envs.drawer_vase_physics_env import summarize_drawer_vase_episode
+                from src.envs.drawer_vase_physics_env import (
+                    summarize_drawer_vase_episode,
+                )
+
                 return summarize_drawer_vase_episode(self._info_history)
             except ImportError:
                 pass
@@ -142,6 +145,7 @@ class PyBulletBackend(PhysicsBackend):
         if self._env_name == "dishwashing":
             try:
                 from src.envs.dishwashing_env import summarize_episode_info
+
                 return summarize_episode_info(self._info_history)
             except ImportError:
                 pass
@@ -195,41 +199,41 @@ class PyBulletBackend(PhysicsBackend):
 
     def close(self) -> None:
         """Clean up resources."""
-        if hasattr(self._env, 'close'):
+        if hasattr(self._env, "close"):
             self._env.close()
 
     def get_observation_space(self) -> Any:
         """Get observation space from underlying env."""
-        if hasattr(self._env, 'observation_space'):
+        if hasattr(self._env, "observation_space"):
             return self._env.observation_space
         raise NotImplementedError("Underlying env has no observation_space")
 
     def get_action_space(self) -> Any:
         """Get action space from underlying env."""
-        if hasattr(self._env, 'action_space'):
+        if hasattr(self._env, "action_space"):
             return self._env.action_space
         raise NotImplementedError("Underlying env has no action_space")
 
     def render(self, mode: str = "human") -> Optional[Any]:
         """Render using underlying env."""
-        if hasattr(self._env, 'render'):
+        if hasattr(self._env, "render"):
             return self._env.render(mode=mode)
         raise NotImplementedError("Underlying env has no render method")
 
     def seed(self, seed: Optional[int] = None) -> None:
         """Set random seed."""
-        if hasattr(self._env, 'seed'):
+        if hasattr(self._env, "seed"):
             self._env.seed(seed)
 
     def get_state(self) -> Any:
         """Get simulation state."""
-        if hasattr(self._env, 'get_state'):
+        if hasattr(self._env, "get_state"):
             return self._env.get_state()
         raise NotImplementedError("Underlying env has no get_state method")
 
     def set_state(self, state: Any) -> None:
         """Set simulation state."""
-        if hasattr(self._env, 'set_state'):
+        if hasattr(self._env, "set_state"):
             self._env.set_state(state)
         else:
             raise NotImplementedError("Underlying env has no set_state method")

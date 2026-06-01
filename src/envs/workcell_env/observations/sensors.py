@@ -1,12 +1,16 @@
 """
 Sensor stubs for workcell environments.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
+np: Any
 try:
-    import numpy as np
+    import numpy as _np
+
+    np = _np
 except ImportError:  # pragma: no cover - numpy optional for stubs
     np = None
 

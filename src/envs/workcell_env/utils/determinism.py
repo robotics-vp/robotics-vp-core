@@ -1,12 +1,13 @@
 """
 Determinism helpers for workcell environments.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import random
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 
@@ -24,10 +25,14 @@ def set_deterministic_seed(seed: int) -> None:
         pass
 
 
-def deterministic_episode_id(prefix: str, seed: int, extra: Mapping[str, Any] | None = None) -> str:
+def deterministic_episode_id(
+    prefix: str, seed: int, extra: Mapping[str, Any] | None = None
+) -> str:
     """Create a deterministic episode id without UUIDs."""
     payload = {"prefix": prefix, "seed": seed, "extra": dict(extra or {})}
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:10]
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:10]
     return f"{prefix}_{digest}"
 
 

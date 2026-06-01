@@ -3,9 +3,10 @@ TrajectoryAuditV1 integration for workcell environments.
 
 Phase 3: Makes TrajectoryAuditV1 unavoidable in training entrypoints.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -85,7 +86,6 @@ class WorkcellTrajectoryCollector:
         self._rewards.append(float(reward))
 
         # Extract reward components from info or breakdown
-        task_info = info.get("task", {})
         if "reward_breakdown" in info:
             rb = info["reward_breakdown"]
             if isinstance(rb, RewardBreakdownV1):
@@ -97,7 +97,9 @@ class WorkcellTrajectoryCollector:
                 for key, val in rb.items():
                     if key not in self._reward_components:
                         self._reward_components[key] = []
-                    self._reward_components[key].append(float(val) if val is not None else 0.0)
+                    self._reward_components[key].append(
+                        float(val) if val is not None else 0.0
+                    )
 
         # Extract velocity from obs or info
         velocity = None
@@ -168,7 +170,9 @@ class WorkcellTrajectoryCollector:
             num_steps=len(self._actions),
             actions=self._actions,
             rewards=self._rewards,
-            reward_components=self._reward_components if self._reward_components else None,
+            reward_components=self._reward_components
+            if self._reward_components
+            else None,
             events=self._events if self._events else None,
             penetrations=self._penetrations if self._penetrations else None,
             velocities=self._velocities if self._velocities else None,
@@ -179,6 +183,7 @@ class WorkcellTrajectoryCollector:
     def event_counts(self) -> Dict[str, int]:
         """Get event counts for inspection."""
         from collections import Counter
+
         return dict(Counter(self._events))
 
 

@@ -320,6 +320,13 @@ def build_reconstruction_grounding_report(
             if value not in (None, "", [], {})
         },
     }
+    payload_metadata: Dict[str, Any] = {
+        "scene_tracks_backend": backend,
+        "semantic_grounding_mode": grounding_mode,
+        "vision_backbone_selected": vision_backend,
+        "teacher_runtime_backend_selected": teacher_backend,
+        **_mapping(metadata),
+    }
     payload = {
         "episode_id": sidecar.episode_id,
         "reconstruction_sidecar_id": sidecar.sidecar_id,
@@ -330,13 +337,7 @@ def build_reconstruction_grounding_report(
         "missing_refs": missing_refs,
         "quality": quality,
         "artifact_refs": artifact_refs,
-        "metadata": {
-            "scene_tracks_backend": backend,
-            "semantic_grounding_mode": grounding_mode,
-            "vision_backbone_selected": vision_backend,
-            "teacher_runtime_backend_selected": teacher_backend,
-            **_mapping(metadata),
-        },
+        "metadata": payload_metadata,
         "version": "reconstruction_grounding_report_v1",
     }
     return ReconstructionGroundingReport(
@@ -350,7 +351,7 @@ def build_reconstruction_grounding_report(
         missing_refs=missing_refs,
         quality=quality,
         artifact_refs=artifact_refs,
-        metadata=payload["metadata"],
+        metadata=payload_metadata,
     )
 
 
@@ -414,15 +415,13 @@ def _calibration_records_from_sensor_bundle(
     if not isinstance(sensor_bundle_meta, Mapping):
         return []
     cameras = sensor_bundle_meta.get("cameras") or []
-    intrinsics = (
-        sensor_bundle_meta.get("intrinsics")
-        if isinstance(sensor_bundle_meta.get("intrinsics"), Mapping)
-        else {}
+    raw_intrinsics = sensor_bundle_meta.get("intrinsics")
+    intrinsics: Mapping[str, Any] = (
+        raw_intrinsics if isinstance(raw_intrinsics, Mapping) else {}
     )
-    extrinsics = (
-        sensor_bundle_meta.get("extrinsics")
-        if isinstance(sensor_bundle_meta.get("extrinsics"), Mapping)
-        else {}
+    raw_extrinsics = sensor_bundle_meta.get("extrinsics")
+    extrinsics: Mapping[str, Any] = (
+        raw_extrinsics if isinstance(raw_extrinsics, Mapping) else {}
     )
     records: list[CameraCalibrationRecord] = []
     for camera_name in cameras:

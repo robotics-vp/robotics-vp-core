@@ -1,6 +1,7 @@
 """
 MuJoCo physics adapter for workcell environments.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -121,8 +122,6 @@ class MujocoPhysicsAdapter:
         }
 
     def check_collision(self, object_id_a: str, object_id_b: str) -> bool:
-        import mujoco  # type: ignore
-
         if self._model is None or self._data is None:
             return False
         body_a = self._body_name_to_id.get(object_id_a)
@@ -135,7 +134,9 @@ class MujocoPhysicsAdapter:
             geom2 = contact.geom2
             body1 = self._model.geom_bodyid[geom1]
             body2 = self._model.geom_bodyid[geom2]
-            if (body1 == body_a and body2 == body_b) or (body1 == body_b and body2 == body_a):
+            if (body1 == body_a and body2 == body_b) or (
+                body1 == body_b and body2 == body_a
+            ):
                 return True
         return False
 
@@ -204,21 +205,33 @@ def _build_mjcf(scene_spec: WorkcellSceneSpec) -> str:
     bodies = []
     for station in scene_spec.stations:
         size = (0.5, 0.5, 0.05)
-        bodies.append(_static_body_xml(station.id, station.position, station.orientation, size))
+        bodies.append(
+            _static_body_xml(station.id, station.position, station.orientation, size)
+        )
     for fixture in scene_spec.fixtures:
-        dims = DEFAULT_FIXTURE_DIMENSIONS_MM.get(fixture.fixture_type, (300.0, 200.0, 120.0))
+        dims = DEFAULT_FIXTURE_DIMENSIONS_MM.get(
+            fixture.fixture_type, (300.0, 200.0, 120.0)
+        )
         size = (dims[0] / 2000.0, dims[1] / 2000.0, dims[2] / 2000.0)
-        bodies.append(_static_body_xml(fixture.id, fixture.position, fixture.orientation, size))
+        bodies.append(
+            _static_body_xml(fixture.id, fixture.position, fixture.orientation, size)
+        )
     for container in scene_spec.containers:
         size = (
             container.slot_size_mm[0] / 2000.0,
             container.slot_size_mm[1] / 2000.0,
             container.slot_size_mm[2] / 2000.0,
         )
-        bodies.append(_static_body_xml(container.id, container.position, container.orientation, size))
+        bodies.append(
+            _static_body_xml(
+                container.id, container.position, container.orientation, size
+            )
+        )
     for conveyor in scene_spec.conveyors:
         size = (conveyor.length_m / 2.0, conveyor.width_m / 2.0, 0.05)
-        bodies.append(_static_body_xml(conveyor.id, conveyor.position, conveyor.orientation, size))
+        bodies.append(
+            _static_body_xml(conveyor.id, conveyor.position, conveyor.orientation, size)
+        )
     for part in scene_spec.parts:
         size = (
             part.dimensions_mm[0] / 2000.0,
@@ -231,17 +244,26 @@ def _build_mjcf(scene_spec: WorkcellSceneSpec) -> str:
         bodies.append(_dynamic_body_xml(tool.id, tool.position, tool.orientation, size))
 
     if not scene_spec.tools:
-        bodies.append(_dynamic_body_xml("end_effector", (0.0, 0.0, 0.4), (1.0, 0.0, 0.0, 0.0), (0.04, 0.04, 0.04)))
+        bodies.append(
+            _dynamic_body_xml(
+                "end_effector",
+                (0.0, 0.0, 0.4),
+                (1.0, 0.0, 0.0, 0.0),
+                (0.04, 0.04, 0.04),
+            )
+        )
 
-    geoms.append('<geom name="floor" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"/>')
+    geoms.append(
+        '<geom name="floor" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"/>'
+    )
     cameras = _default_camera_xml()
 
     xml = f"""
 <mujoco>
   <option gravity="0 0 -9.81" integrator="Euler"/>
   <worldbody>
-    {''.join(geoms)}
-    {''.join(bodies)}
+    {"".join(geoms)}
+    {"".join(bodies)}
     {cameras}
   </worldbody>
 </mujoco>
@@ -265,7 +287,12 @@ def _safe_close_renderer(renderer: Any) -> None:
         pass
 
 
-def _static_body_xml(name: str, position: Tuple[float, float, float], orientation: Tuple[float, float, float, float], size: Tuple[float, float, float]) -> str:
+def _static_body_xml(
+    name: str,
+    position: Tuple[float, float, float],
+    orientation: Tuple[float, float, float, float],
+    size: Tuple[float, float, float],
+) -> str:
     pos = " ".join(f"{v:.4f}" for v in position)
     quat = " ".join(f"{v:.4f}" for v in orientation)
     size_str = " ".join(f"{v:.4f}" for v in size)
@@ -276,7 +303,12 @@ def _static_body_xml(name: str, position: Tuple[float, float, float], orientatio
     )
 
 
-def _dynamic_body_xml(name: str, position: Tuple[float, float, float], orientation: Tuple[float, float, float, float], size: Tuple[float, float, float]) -> str:
+def _dynamic_body_xml(
+    name: str,
+    position: Tuple[float, float, float],
+    orientation: Tuple[float, float, float, float],
+    size: Tuple[float, float, float],
+) -> str:
     pos = " ".join(f"{v:.4f}" for v in position)
     quat = " ".join(f"{v:.4f}" for v in orientation)
     size_str = " ".join(f"{v:.4f}" for v in size)
@@ -294,7 +326,9 @@ def _default_camera_xml() -> str:
         ("top", (0.0, 0.0, 2.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
         ("wrist", (0.3, -0.3, 0.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
     ]
-    return "".join(_camera_xml(name, pos, look_at, up) for name, pos, look_at, up in cameras)
+    return "".join(
+        _camera_xml(name, pos, look_at, up) for name, pos, look_at, up in cameras
+    )
 
 
 def _camera_xml(
@@ -368,7 +402,14 @@ def _build_body_map(model: Any, scene_spec: WorkcellSceneSpec) -> Dict[str, int]
     import mujoco  # type: ignore
 
     names = []
-    for group in (scene_spec.stations, scene_spec.fixtures, scene_spec.containers, scene_spec.conveyors, scene_spec.parts, scene_spec.tools):
+    for group in (
+        scene_spec.stations,
+        scene_spec.fixtures,
+        scene_spec.containers,
+        scene_spec.conveyors,
+        scene_spec.parts,
+        scene_spec.tools,
+    ):
         for item in group:
             names.append(item.id)
     if not scene_spec.tools:
@@ -415,16 +456,26 @@ def _build_object_type_map(scene_spec: WorkcellSceneSpec) -> Dict[str, str]:
     return mapping
 
 
-def _set_initial_state(model: Any, data: Any, scene_spec: WorkcellSceneSpec, free_joints: Dict[str, int]) -> None:
+def _set_initial_state(
+    model: Any, data: Any, scene_spec: WorkcellSceneSpec, free_joints: Dict[str, int]
+) -> None:
     for part in scene_spec.parts:
         _set_body_pose(data, free_joints, part.id, part.position, part.orientation)
     for tool in scene_spec.tools:
         _set_body_pose(data, free_joints, tool.id, tool.position, tool.orientation)
     if not scene_spec.tools:
-        _set_body_pose(data, free_joints, "end_effector", (0.0, 0.0, 0.4), (1.0, 0.0, 0.0, 0.0))
+        _set_body_pose(
+            data, free_joints, "end_effector", (0.0, 0.0, 0.4), (1.0, 0.0, 0.0, 0.0)
+        )
 
 
-def _set_body_pose(data: Any, free_joints: Dict[str, int], name: str, position: Tuple[float, float, float], orientation: Tuple[float, float, float, float]) -> None:
+def _set_body_pose(
+    data: Any,
+    free_joints: Dict[str, int],
+    name: str,
+    position: Tuple[float, float, float],
+    orientation: Tuple[float, float, float, float],
+) -> None:
     qpos_addr = free_joints.get(name)
     if qpos_addr is None:
         return

@@ -4,21 +4,32 @@ Fragility Prior Head for Vision-Based HRL.
 Draws heatmaps around detected fragile objects.
 """
 
+from typing import Any
+
 import numpy as np
 
+_torch: Any
+_torch_nn: Any
+_torch_F: Any
 try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _torch_F
+
     TORCH_AVAILABLE = True
 except ImportError:
+    _torch = None
+    _torch_nn = None
+    _torch_F = None
     TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
+
+torch = _torch
+nn = _torch_nn
+F = _torch_F
+_NN_MODULE: Any = nn.Module if TORCH_AVAILABLE else object
 
 
-class FragilityPriorHead(nn.Module if TORCH_AVAILABLE else object):
+class FragilityPriorHead(_NN_MODULE):
     """
     Predicts fragility priors - heatmaps indicating fragile object locations
     and their fragility level.
@@ -37,7 +48,7 @@ class FragilityPriorHead(nn.Module if TORCH_AVAILABLE else object):
         in_channels=128,
         hidden_channels=64,
         out_size=(16, 16),
-        num_fragility_levels=3  # low, medium, high
+        num_fragility_levels=3,  # low, medium, high
     ):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for FragilityPriorHead")
@@ -75,7 +86,7 @@ class FragilityPriorHead(nn.Module if TORCH_AVAILABLE else object):
             nn.Sigmoid(),
         )
 
-        self.upsample = nn.Upsample(size=out_size, mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(size=out_size, mode="bilinear", align_corners=False)
 
     def forward(self, features, return_all=False):
         """
@@ -102,10 +113,12 @@ class FragilityPriorHead(nn.Module if TORCH_AVAILABLE else object):
 
         # Weighted fragility score
         # Level weights: [0.3, 0.6, 1.0] for low, medium, high
-        level_weights = torch.tensor(
-            [0.3, 0.6, 1.0], device=features.device
-        ).view(1, -1, 1, 1)
-        fragility_score = (frag_levels * level_weights).sum(dim=1)  # (batch, out_H, out_W)
+        level_weights = torch.tensor([0.3, 0.6, 1.0], device=features.device).view(
+            1, -1, 1, 1
+        )
+        fragility_score = (frag_levels * level_weights).sum(
+            dim=1
+        )  # (batch, out_H, out_W)
 
         # Spread: how far does fragility extend?
         spread = self.spread_head(shared)  # (batch, 1, H, W)
@@ -181,17 +194,14 @@ class FragilityPriorGenerator:
         self,
         image_size=(128, 128),
         default_fragility_radius=0.1,  # meters
-        fragility_levels={'low': 0.3, 'medium': 0.6, 'high': 1.0}
+        fragility_levels={"low": 0.3, "medium": 0.6, "high": 1.0},
     ):
         self.image_size = image_size
         self.default_radius = default_fragility_radius
         self.fragility_levels = fragility_levels
 
     def generate_for_vase(
-        self,
-        vase_pos,
-        fragility_level='high',
-        material_type='glass'
+        self, vase_pos, fragility_level="high", material_type="glass"
     ):
         """
         Generate fragility heatmap for a vase.
@@ -211,11 +221,11 @@ class FragilityPriorGenerator:
         frag_score = self.fragility_levels.get(fragility_level, 0.6)
 
         # Material-based adjustments
-        if material_type == 'glass':
+        if material_type == "glass":
             frag_score *= 1.2  # Glass is very fragile
-        elif material_type == 'ceramic':
+        elif material_type == "ceramic":
             frag_score *= 1.0
-        elif material_type == 'metal':
+        elif material_type == "metal":
             frag_score *= 0.3
 
         frag_score = min(frag_score, 1.0)
@@ -235,7 +245,7 @@ class FragilityPriorGenerator:
                 if 0 <= x < W and 0 <= y < H:
                     dist = np.sqrt(dx**2 + dy**2)
                     # Gaussian with fragility score
-                    value = frag_score * np.exp(-dist**2 / (2 * radius_pixels**2))
+                    value = frag_score * np.exp(-(dist**2) / (2 * radius_pixels**2))
                     heatmap[y, x] = max(heatmap[y, x], value)
 
         return heatmap
@@ -255,9 +265,9 @@ class FragilityPriorGenerator:
 
         for obj in objects:
             obj_heatmap = self.generate_for_vase(
-                obj['position'],
-                obj.get('fragility_level', 'medium'),
-                obj.get('material', 'ceramic')
+                obj["position"],
+                obj.get("fragility_level", "medium"),
+                obj.get("material", "ceramic"),
             )
             # Max combine (most fragile wins)
             combined = np.maximum(combined, obj_heatmap)
@@ -292,7 +302,7 @@ class FragilityPriorGenerator:
         bright_mask = brightness > 0.8
 
         # Smooth regions (low texture variance)
-        from scipy.ndimage import uniform_filter
+        from scipy.ndimage import uniform_filter  # type: ignore[import-untyped]
 
         local_mean = uniform_filter(gray, size=5)
         local_sqr_mean = uniform_filter(gray**2, size=5)
@@ -300,11 +310,13 @@ class FragilityPriorGenerator:
         smooth_mask = variance < 100  # Low variance = smooth
 
         # Combine signals
-        fragility_signal = (bright_mask.astype(float) * 0.3 +
-                           smooth_mask.astype(float) * 0.7)
+        fragility_signal = (
+            bright_mask.astype(float) * 0.3 + smooth_mask.astype(float) * 0.7
+        )
 
         # Smooth the result
-        from scipy.ndimage import gaussian_filter
+        from scipy.ndimage import gaussian_filter  # type: ignore[import-untyped]
+
         heatmap = gaussian_filter(fragility_signal, sigma=3)
 
         return heatmap.astype(np.float32)

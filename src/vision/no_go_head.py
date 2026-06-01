@@ -4,21 +4,32 @@ No-Go Zone Head for Vision-Based HRL.
 Predicts binary mask of unsafe regions that should be avoided.
 """
 
+from typing import Any
+
 import numpy as np
 
+_torch: Any
+_torch_nn: Any
+_torch_F: Any
 try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _torch_F
+
     TORCH_AVAILABLE = True
 except ImportError:
+    _torch = None
+    _torch_nn = None
+    _torch_F = None
     TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
+
+torch = _torch
+nn = _torch_nn
+F = _torch_F
+_NN_MODULE: Any = nn.Module if TORCH_AVAILABLE else object
 
 
-class NoGoZoneHead(nn.Module if TORCH_AVAILABLE else object):
+class NoGoZoneHead(_NN_MODULE):
     """
     Predicts binary mask of unsafe (no-go) zones.
 
@@ -32,11 +43,7 @@ class NoGoZoneHead(nn.Module if TORCH_AVAILABLE else object):
     """
 
     def __init__(
-        self,
-        in_channels=128,
-        hidden_channels=64,
-        out_size=(16, 16),
-        risk_threshold=0.7
+        self, in_channels=128, hidden_channels=64, out_size=(16, 16), risk_threshold=0.7
     ):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for NoGoZoneHead")
@@ -57,7 +64,7 @@ class NoGoZoneHead(nn.Module if TORCH_AVAILABLE else object):
             nn.Conv2d(32, 1, 1),
         )
 
-        self.upsample = nn.Upsample(size=out_size, mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(size=out_size, mode="bilinear", align_corners=False)
 
     def forward(self, features, return_soft=False):
         """
@@ -71,8 +78,8 @@ class NoGoZoneHead(nn.Module if TORCH_AVAILABLE else object):
             no_go_mask: (batch, out_H, out_W) binary or soft mask
         """
         x = self.conv(features)  # (batch, 1, H, W)
-        x = self.upsample(x)      # (batch, 1, out_H, out_W)
-        x = x.squeeze(1)          # (batch, out_H, out_W)
+        x = self.upsample(x)  # (batch, 1, out_H, out_W)
+        x = x.squeeze(1)  # (batch, out_H, out_W)
 
         soft_mask = torch.sigmoid(x)
 
@@ -154,7 +161,7 @@ class NoGoZoneGenerator:
         self,
         image_size=(128, 128),
         object_radius=0.08,  # meters (vase radius + margin)
-        workspace_bounds=(-1.0, 1.0, -1.0, 1.0)  # x_min, x_max, y_min, y_max
+        workspace_bounds=(-1.0, 1.0, -1.0, 1.0),  # x_min, x_max, y_min, y_max
     ):
         self.image_size = image_size
         self.object_radius = object_radius
@@ -215,8 +222,12 @@ class NoGoZoneGenerator:
                 world_y = (y / H) * 2 - 1
 
                 # Check if outside bounds
-                if (world_x < x_min or world_x > x_max or
-                    world_y < y_min or world_y > y_max):
+                if (
+                    world_x < x_min
+                    or world_x > x_max
+                    or world_y < y_min
+                    or world_y > y_max
+                ):
                     bounds_mask[y, x] = 1.0
 
         return bounds_mask

@@ -1,9 +1,10 @@
 """
 Motion Hierarchy Node (MHN) for unsupervised motion structure learning.
 """
+
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -26,17 +27,22 @@ class MLP(nn.Module):
         self._out_dim = int(out_dim)
         self._layers: nn.ModuleList = nn.ModuleList()
 
-        dims: list[Optional[int]] = [in_dim] + [int(h) for h in hidden_dims] + [self._out_dim]
+        dims: list[Optional[int]] = (
+            [in_dim] + [int(h) for h in hidden_dims] + [self._out_dim]
+        )
         for idx in range(len(dims) - 1):
             in_features = dims[idx]
-            out_features = int(dims[idx + 1]) if dims[idx + 1] is not None else None
+            raw_out_features = dims[idx + 1]
+            if raw_out_features is None:
+                raise ValueError("MLP output dimensions must be concrete.")
+            out_features = int(raw_out_features)
             if in_features is None:
-                self._layers.append(nn.LazyLinear(out_features))  # type: ignore[arg-type]
+                self._layers.append(nn.LazyLinear(out_features))
             else:
-                self._layers.append(nn.Linear(int(in_features), int(out_features)))
+                self._layers.append(nn.Linear(int(in_features), out_features))
             if idx < len(dims) - 2:
                 if use_batch_norm:
-                    self._layers.append(nn.BatchNorm1d(int(out_features)))
+                    self._layers.append(nn.BatchNorm1d(out_features))
                 self._layers.append(nn.ReLU())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -47,7 +53,9 @@ class MLP(nn.Module):
         return x.reshape(*orig_shape, self._out_dim)
 
 
-def _normalize_node_mask(mask: Optional[torch.Tensor], positions: torch.Tensor) -> Optional[torch.Tensor]:
+def _normalize_node_mask(
+    mask: Optional[torch.Tensor], positions: torch.Tensor
+) -> Optional[torch.Tensor]:
     if mask is None:
         return None
     if mask.dim() == 4:
@@ -55,7 +63,9 @@ def _normalize_node_mask(mask: Optional[torch.Tensor], positions: torch.Tensor) 
     elif mask.dim() == 2:
         mask_nodes = mask
     else:
-        raise ValueError(f"mask must have shape (B, N) or (B, 1, N, 1). Got {mask.shape}.")
+        raise ValueError(
+            f"mask must have shape (B, N) or (B, 1, N, 1). Got {mask.shape}."
+        )
     if mask_nodes.shape[0] != positions.shape[0]:
         raise ValueError("mask batch dimension must match positions batch dimension")
     return mask_nodes.to(dtype=positions.dtype, device=positions.device)
@@ -81,7 +91,7 @@ def build_knn_graph(
     B, _, N, _ = positions.shape
     mean_pos = positions.mean(dim=1)
     diff = mean_pos.unsqueeze(2) - mean_pos.unsqueeze(1)
-    dist = (diff ** 2).sum(dim=-1)
+    dist = (diff**2).sum(dim=-1)
 
     mask_nodes = _normalize_node_mask(mask, positions)
     if mask_nodes is not None:
@@ -103,7 +113,9 @@ def reconstruct_deltas(
 ) -> torch.Tensor:
     """Reconstruct deltas via truncated Neumann series."""
     if delta_resid.ndim != 4:
-        raise ValueError(f"delta_resid must be (B, T-1, N, D). Got {delta_resid.shape}.")
+        raise ValueError(
+            f"delta_resid must be (B, T-1, N, D). Got {delta_resid.shape}."
+        )
     if H.ndim != 3:
         raise ValueError(f"H must be (B, N, N). Got {H.shape}.")
 
@@ -240,7 +252,7 @@ class MotionHierarchyNode(nn.Module):
         mask: Optional[torch.Tensor] = None,  # (B, N) or (B, 1, N, 1)
         *,
         return_losses: bool = False,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, Any]:
         """
         Args:
             positions: World-coordinate positions with contiguous time steps.
@@ -274,7 +286,9 @@ class MotionHierarchyNode(nn.Module):
                 batch_idx = torch.arange(B, device=node_feats.device).view(B, 1, 1)
                 neighbor_feats = node_feats[batch_idx, neighbor_idx]
                 agg = (neighbor_feats * weights).sum(dim=2)
-                node_feats = self.node_update_mlps[layer_idx](torch.cat([node_feats, agg], dim=-1))
+                node_feats = self.node_update_mlps[layer_idx](
+                    torch.cat([node_feats, agg], dim=-1)
+                )
 
         if edge_logits is None:
             raise RuntimeError("Failed to compute edge logits.")
@@ -284,14 +298,20 @@ class MotionHierarchyNode(nn.Module):
 
         mask_nodes = _normalize_node_mask(mask, positions)
         if mask_nodes is not None:
-            parent_logits = parent_logits.masked_fill(~mask_nodes.bool().unsqueeze(1), float("-inf"))
-            parent_logits = parent_logits.masked_fill(~mask_nodes.bool().unsqueeze(-1), float("-inf"))
+            parent_logits = parent_logits.masked_fill(
+                ~mask_nodes.bool().unsqueeze(1), float("-inf")
+            )
+            parent_logits = parent_logits.masked_fill(
+                ~mask_nodes.bool().unsqueeze(-1), float("-inf")
+            )
 
         parent_logits = self._ensure_self_parent(parent_logits)
 
         parent_probs = torch.softmax(parent_logits, dim=-1)
         if mask_nodes is not None:
-            diag = torch.eye(N, device=positions.device, dtype=parent_probs.dtype).unsqueeze(0)
+            diag = torch.eye(
+                N, device=positions.device, dtype=parent_probs.dtype
+            ).unsqueeze(0)
             row_mask = mask_nodes.unsqueeze(-1)
             parent_probs = parent_probs * row_mask + diag * (1.0 - row_mask)
 
@@ -305,7 +325,9 @@ class MotionHierarchyNode(nn.Module):
             dim=-1,
         )
         if mask_nodes is not None:
-            diag = torch.eye(N, device=positions.device, dtype=hierarchy.dtype).unsqueeze(0)
+            diag = torch.eye(
+                N, device=positions.device, dtype=hierarchy.dtype
+            ).unsqueeze(0)
             row_mask = mask_nodes.unsqueeze(-1)
             hierarchy = hierarchy * row_mask + diag * (1.0 - row_mask)
 
@@ -313,7 +335,7 @@ class MotionHierarchyNode(nn.Module):
 
         stats = compute_hierarchy_stats(hierarchy, mask=mask_nodes)
 
-        output: Dict[str, torch.Tensor] = {
+        output: Dict[str, Any] = {
             "deltas": deltas,
             "delta_hat": delta_hat,
             "delta_resid": delta_resid,
@@ -328,7 +350,12 @@ class MotionHierarchyNode(nn.Module):
             if mask_nodes is not None:
                 mask_exp = mask_nodes.unsqueeze(1).unsqueeze(-1)
                 denom = mask_exp.sum().clamp(min=1.0)
-                recon = F.smooth_l1_loss(delta_hat * mask_exp, deltas * mask_exp, reduction="sum") / denom
+                recon = (
+                    F.smooth_l1_loss(
+                        delta_hat * mask_exp, deltas * mask_exp, reduction="sum"
+                    )
+                    / denom
+                )
                 resid = (delta_resid.abs() * mask_exp).sum() / denom
             else:
                 recon = F.smooth_l1_loss(delta_hat, deltas)

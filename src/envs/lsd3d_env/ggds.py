@@ -36,6 +36,7 @@ class CameraRig:
         width: Image width in pixels
         height: Image height in pixels
     """
+
     positions: np.ndarray
     look_at: np.ndarray
     up: np.ndarray = field(default_factory=lambda: np.array([[0, 0, 1]]))
@@ -68,14 +69,14 @@ class CameraRig:
     ) -> "CameraRig":
         """Create an orbiting camera rig around a center point."""
         angles = np.linspace(0, 2 * np.pi, num_views, endpoint=False)
-        positions = []
+        position_rows: List[List[float]] = []
         for angle in angles:
             x = center[0] + radius * np.cos(angle)
             y = center[1] + radius * np.sin(angle)
             z = center[2] + height
-            positions.append([x, y, z])
+            position_rows.append([float(x), float(y), float(z)])
 
-        positions = np.array(positions, dtype=np.float32)
+        positions = np.array(position_rows, dtype=np.float32)
         look_at = np.tile(np.array(center), (num_views, 1)).astype(np.float32)
         up = np.tile(np.array([0, 0, 1]), (num_views, 1)).astype(np.float32)
 
@@ -107,6 +108,7 @@ class GGDSConfig:
         use_depth_conditioning: Whether to use depth maps for conditioning
         prompts: List of text prompts for scene generation
     """
+
     num_iterations: int = 100
     learning_rate: float = 0.01
     ddim_steps: int = 50
@@ -200,7 +202,9 @@ class GGDSOptimizer:
         camera_rig: CameraRig,
         prompts: Optional[List[str]] = None,
         num_iterations: Optional[int] = None,
-        callback: Optional[Callable[[int, GaussianScene, Dict[str, float]], None]] = None,
+        callback: Optional[
+            Callable[[int, GaussianScene, Dict[str, float]], None]
+        ] = None,
     ) -> GaussianScene:
         """
         Optimize Gaussian scene using GGDS.
@@ -226,7 +230,9 @@ class GGDSOptimizer:
         if not self._is_initialized:
             # Stub implementation: just return the input scene
             # In production, this would run the full optimization
-            return self._stub_optimize(gaussian_scene, camera_rig, prompts, num_iterations, callback)
+            return self._stub_optimize(
+                gaussian_scene, camera_rig, prompts, num_iterations, callback
+            )
 
         prompts = prompts or self.config.prompts
         num_iterations = num_iterations or self.config.num_iterations
@@ -361,10 +367,10 @@ class GGDSOptimizer:
 
         # Total weighted loss
         total_loss = (
-            self.config.image_loss_weight * image_loss +
-            self.config.perceptual_loss_weight * perceptual_loss +
-            self.config.geometry_loss_weight * geometry_loss +
-            self.config.depth_loss_weight * depth_loss
+            self.config.image_loss_weight * image_loss
+            + self.config.perceptual_loss_weight * perceptual_loss
+            + self.config.geometry_loss_weight * geometry_loss
+            + self.config.depth_loss_weight * depth_loss
         )
 
         # 6. Update Gaussian parameters (would use gradients in real implementation)

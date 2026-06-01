@@ -7,6 +7,7 @@ Implements:
 - Deterministic initialization and forward pass given seed
 - Fallback to hash-based stub when PyTorch unavailable
 """
+
 import hashlib
 import json
 from typing import Any, Dict, Optional, Sequence
@@ -22,6 +23,7 @@ DEFAULT_STRIDES = {"P3": 8, "P4": 16, "P5": 32}
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -39,27 +41,38 @@ def _stable_vector(signature: str, level: str, feature_dim: int) -> np.ndarray:
     """Hash-based deterministic feature vector (fallback mode)."""
     vals = []
     for idx in range(feature_dim):
-        digest = hashlib.sha256(f"{signature}|{level}|{idx}".encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(
+            f"{signature}|{level}|{idx}".encode("utf-8")
+        ).hexdigest()
         vals.append(int(digest[:12], 16) / float(16**12))
     return np.array(vals, dtype=np.float32)
 
 
 if TORCH_AVAILABLE:
+
     class RegNetBottleneck(nn.Module):
         """RegNet-style bottleneck block with group convolution."""
 
-        def __init__(self, in_channels: int, out_channels: int, stride: int = 1, groups: int = 8):
+        def __init__(
+            self, in_channels: int, out_channels: int, stride: int = 1, groups: int = 8
+        ):
             super().__init__()
             mid_channels = out_channels // 2
             self.conv1 = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
             self.bn1 = nn.BatchNorm2d(mid_channels)
             self.conv2 = nn.Conv2d(
-                mid_channels, mid_channels,
-                kernel_size=3, stride=stride, padding=1,
-                groups=min(groups, mid_channels), bias=False
+                mid_channels,
+                mid_channels,
+                kernel_size=3,
+                stride=stride,
+                padding=1,
+                groups=min(groups, mid_channels),
+                bias=False,
             )
             self.bn2 = nn.BatchNorm2d(mid_channels)
-            self.conv3 = nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False)
+            self.conv3 = nn.Conv2d(
+                mid_channels, out_channels, kernel_size=1, bias=False
+            )
             self.bn3 = nn.BatchNorm2d(out_channels)
             self.relu = nn.ReLU(inplace=True)
 
@@ -67,8 +80,14 @@ if TORCH_AVAILABLE:
             self.downsample = None
             if stride != 1 or in_channels != out_channels:
                 self.downsample = nn.Sequential(
-                    nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                    nn.BatchNorm2d(out_channels)
+                    nn.Conv2d(
+                        in_channels,
+                        out_channels,
+                        kernel_size=1,
+                        stride=stride,
+                        bias=False,
+                    ),
+                    nn.BatchNorm2d(out_channels),
                 )
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -85,7 +104,6 @@ if TORCH_AVAILABLE:
             out = self.relu(out)
             return out
 
-
     class RegNetBackbone(nn.Module):
         """
         RegNet-style backbone for feature pyramid extraction.
@@ -99,7 +117,7 @@ if TORCH_AVAILABLE:
         def __init__(
             self,
             in_channels: int = 3,
-            feature_dims: Dict[str, int] = None,
+            feature_dims: Optional[Dict[str, int]] = None,
             levels: Sequence[str] = DEFAULT_LEVELS,
             groups: int = 8,
             seed: int = 0,
@@ -118,12 +136,14 @@ if TORCH_AVAILABLE:
 
             # Stem: initial convolution
             self.stem = nn.Sequential(
-                nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False),
+                nn.Conv2d(
+                    in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False
+                ),
                 nn.BatchNorm2d(32),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1, bias=False),
                 nn.BatchNorm2d(64),
-                nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True),
             )
 
             # Build stages for different strides
@@ -145,7 +165,12 @@ if TORCH_AVAILABLE:
                 for i in range(num_stride_blocks):
                     block_stride = 2 if i == 0 else 1
                     stage_blocks.append(
-                        RegNetBottleneck(current_channels, out_channels, stride=block_stride, groups=groups)
+                        RegNetBottleneck(
+                            current_channels,
+                            out_channels,
+                            stride=block_stride,
+                            groups=groups,
+                        )
                     )
                     current_channels = out_channels
 
@@ -171,11 +196,12 @@ if TORCH_AVAILABLE:
             for level in self.levels:
                 if self.use_checkpointing:
                     from src.utils.training_env import checkpoint_if_enabled
+
                     # Checkpoint the whole stage
                     x = checkpoint_if_enabled(self.stages[level], x, enabled=True)
                 else:
                     x = self.stages[level](x)
-                
+
                 # Clamp to prevent NaN/Inf
                 x = torch.clamp(x, min=-1e6, max=1e6)
                 features[level] = x
@@ -206,7 +232,10 @@ def build_regnet_feature_pyramid(
     if not use_neural or not TORCH_AVAILABLE:
         # Fallback to hash-based stub
         signature = _frame_signature(frame)
-        return {str(level): _stable_vector(signature, str(level), feature_dim) for level in levels}
+        return {
+            str(level): _stable_vector(signature, str(level), feature_dim)
+            for level in levels
+        }
 
     # Neural mode: use RegNetBackbone
     # For stub compatibility, we generate dummy input from frame signature
@@ -219,7 +248,9 @@ def build_regnet_feature_pyramid(
 
     # Build model
     feature_dims = {level: feature_dim for level in levels}
-    model = RegNetBackbone(in_channels=3, feature_dims=feature_dims, levels=levels, seed=seed)
+    model = RegNetBackbone(
+        in_channels=3, feature_dims=feature_dims, levels=levels, seed=seed
+    )
     model.eval()
 
     # Forward pass
@@ -258,7 +289,9 @@ def pyramid_to_json_safe(pyramid: Dict[str, np.ndarray]) -> Dict[str, Any]:
     safe: Dict[str, Any] = {}
     for k, v in pyramid.items():
         try:
-            safe[str(k)] = [float(x) for x in np.asarray(v, dtype=np.float32).flatten().tolist()]
+            safe[str(k)] = [
+                float(x) for x in np.asarray(v, dtype=np.float32).flatten().tolist()
+            ]
         except Exception:
             safe[str(k)] = []
     return safe

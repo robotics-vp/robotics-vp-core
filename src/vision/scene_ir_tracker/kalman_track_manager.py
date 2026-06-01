@@ -3,6 +3,7 @@ Kalman Track Manager.
 
 Implements multi-object/body tracking with Kalman filtering and association.
 """
+
 from __future__ import annotations
 
 import logging
@@ -104,7 +105,9 @@ class KalmanTrackManager:
 
         # Process noise
         q = self.config.kalman_process_noise
-        self.Q = np.diag([q, q, q, q * 2, q * 2, q * 2, q * 0.5, q * 0.5]).astype(np.float32)
+        self.Q = np.diag([q, q, q, q * 2, q * 2, q * 2, q * 0.5, q * 0.5]).astype(
+            np.float32
+        )
 
         # Observation noise
         r = self.config.kalman_observation_noise
@@ -162,15 +165,16 @@ class KalmanTrackManager:
             entity = frame_entities[det_idx]
             # Find the newly created track
             for track in self.tracks:
-                if track.age == 0 and np.allclose(track.position, entity.position, atol=0.01):
+                if track.age == 0 and np.allclose(
+                    track.position, entity.position, atol=0.01
+                ):
                     updated = self._entity_from_track(entity, track)
                     output_entities.append(updated)
                     break
 
         # Remove dead tracks
         self.tracks = [
-            t for t in self.tracks
-            if t.time_since_update <= self.config.max_age
+            t for t in self.tracks if t.time_since_update <= self.config.max_age
         ]
 
         return output_entities
@@ -188,12 +192,15 @@ class KalmanTrackManager:
     ) -> None:
         """Kalman update step with observation."""
         # Observation: [x, y, z, scale]
-        z = np.array([
-            entity.position[0],
-            entity.position[1],
-            entity.position[2],
-            entity.scale,
-        ], dtype=np.float32)
+        z = np.array(
+            [
+                entity.position[0],
+                entity.position[1],
+                entity.position[2],
+                entity.scale,
+            ],
+            dtype=np.float32,
+        )
 
         # Innovation
         y = z - self.H @ track.state
@@ -214,7 +221,9 @@ class KalmanTrackManager:
             if track.z_shape_ema is None:
                 track.z_shape_ema = entity.z_shape.copy()
             else:
-                track.z_shape_ema = alpha * track.z_shape_ema + (1 - alpha) * entity.z_shape
+                track.z_shape_ema = (
+                    alpha * track.z_shape_ema + (1 - alpha) * entity.z_shape
+                )
 
         if entity.z_tex is not None:
             if track.z_tex_ema is None:
@@ -347,16 +356,22 @@ class KalmanTrackManager:
 
         # Latent similarity (only if dimensions match)
         latent_cost = 0.0
-        if (detection.z_shape is not None and track.z_shape_ema is not None
-                and detection.z_shape.shape == track.z_shape_ema.shape):
+        if (
+            detection.z_shape is not None
+            and track.z_shape_ema is not None
+            and detection.z_shape.shape == track.z_shape_ema.shape
+        ):
             sim = np.dot(detection.z_shape, track.z_shape_ema)
-            sim /= (np.linalg.norm(detection.z_shape) * np.linalg.norm(track.z_shape_ema) + 1e-8)
+            sim /= (
+                np.linalg.norm(detection.z_shape) * np.linalg.norm(track.z_shape_ema)
+                + 1e-8
+            )
             latent_cost = self.config.latent_similarity_weight * (1 - sim)
 
         # Type mismatch penalty
         type_penalty = 0.0 if detection.entity_type == track.entity_type else 100.0
 
-        return dist_cost + iou_cost + latent_cost + type_penalty
+        return float(dist_cost + iou_cost + latent_cost + type_penalty)
 
     def _greedy_assignment(
         self,

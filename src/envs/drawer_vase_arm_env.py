@@ -5,15 +5,14 @@ Simplified version that uses an articulated arm (KUKA iiwa) and a goal geometry
 instead of the full PyBullet drawer mechanics. Energy attribution uses real joint
 τ·ω to populate metrics for analysis.
 """
-from typing import Any, Dict, List, Optional, Tuple
+
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pybullet as p  # type: ignore[import-not-found]
 import pybullet_data  # type: ignore[import-not-found,import-untyped]
 
 from src.config.econ_params import EconParams
-from src.envs.dishwashing_env import EpisodeInfoSummary
-from src.envs.dishwashing_env import summarize_episode_info as summarize_dish  # reuse structure
 
 LIMB_GROUPS = {
     "shoulder": [0, 1],
@@ -91,7 +90,7 @@ class DrawerVaseArmEnv:
         self.physics_client = p.connect(p.DIRECT if self.headless else p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.8)
-        p.setTimeStep(1. / 240.)
+        p.setTimeStep(1.0 / 240.0)
 
         p.loadURDF("plane.urdf")
 
@@ -100,19 +99,21 @@ class DrawerVaseArmEnv:
             pybullet_data.getDataPath() + "/kuka_iiwa/model.urdf",
             basePosition=[0, 0, 0],
             useFixedBase=True,
-            flags=p.URDF_USE_INERTIA_FROM_FILE
+            flags=p.URDF_USE_INERTIA_FROM_FILE,
         )
         self.controlled_joint_ids = []
         for j in range(p.getNumJoints(self.robot_id)):
             ji = p.getJointInfo(self.robot_id, j)
             if ji[2] == p.JOINT_REVOLUTE:
                 self.controlled_joint_ids.append(j)
-        self.ee_link_id = self.controlled_joint_ids[-1] if self.controlled_joint_ids else None
+        self.ee_link_id = (
+            self.controlled_joint_ids[-1] if self.controlled_joint_ids else None
+        )
         p.setJointMotorControlArray(
             self.robot_id,
             self.controlled_joint_ids,
             controlMode=p.VELOCITY_CONTROL,
-            forces=[0.0] * len(self.controlled_joint_ids)
+            forces=[0.0] * len(self.controlled_joint_ids),
         )
 
         # Task geometry (vase sits close to the drawer target to induce risk)
@@ -154,7 +155,7 @@ class DrawerVaseArmEnv:
             self.robot_id,
             self.ee_link_id,
             computeLinkVelocity=1,
-            computeForwardKinematics=1
+            computeForwardKinematics=1,
         )
         pos = np.array(link_state[0])
         vel = np.array(link_state[6]) if len(link_state) > 6 else np.zeros(3)
@@ -195,7 +196,9 @@ class DrawerVaseArmEnv:
         if isinstance(action, dict) and "target_pos" in action:
             target_pos = np.asarray(action["target_pos"], dtype=np.float32)
             speed_scale = float(action.get("speed_scale", 1.0))
-            joint_targets = self.compute_ik_targets(target_pos, action.get("target_orn", None))
+            joint_targets = self.compute_ik_targets(
+                target_pos, action.get("target_orn", None)
+            )
             self._apply_position_control(joint_targets, speed_scale=speed_scale)
         else:
             action = np.clip(np.asarray(action, dtype=np.float32), -1.0, 1.0)
@@ -205,7 +208,7 @@ class DrawerVaseArmEnv:
                 self.controlled_joint_ids,
                 controlMode=p.VELOCITY_CONTROL,
                 targetVelocities=target_vel.tolist(),
-                forces=[20.0] * len(self.controlled_joint_ids)
+                forces=[20.0] * len(self.controlled_joint_ids),
             )
         p.stepSimulation()
         dt = 1.0 / 240.0
@@ -221,12 +224,24 @@ class DrawerVaseArmEnv:
             name = f"joint_{jid}"
             wh = float(power[j_idx] * dt / 3600.0)
             self.joint_energy_Wh[name] = self.joint_energy_Wh.get(name, 0.0) + wh
-            self.joint_power_sum_W[name] = self.joint_power_sum_W.get(name, 0.0) + float(power[j_idx])
-            self.joint_peak_power_W[name] = max(self.joint_peak_power_W.get(name, 0.0), float(power[j_idx]))
-            self.joint_abs_vel_sum[name] = self.joint_abs_vel_sum.get(name, 0.0) + abs(float(omega[j_idx]))
-            self.joint_abs_tau_sum[name] = self.joint_abs_tau_sum.get(name, 0.0) + abs(float(tau[j_idx]))
-            self.joint_max_vel[name] = max(self.joint_max_vel.get(name, 0.0), abs(float(omega[j_idx])))
-            self.joint_max_tau[name] = max(self.joint_max_tau.get(name, 0.0), abs(float(tau[j_idx])))
+            self.joint_power_sum_W[name] = self.joint_power_sum_W.get(
+                name, 0.0
+            ) + float(power[j_idx])
+            self.joint_peak_power_W[name] = max(
+                self.joint_peak_power_W.get(name, 0.0), float(power[j_idx])
+            )
+            self.joint_abs_vel_sum[name] = self.joint_abs_vel_sum.get(name, 0.0) + abs(
+                float(omega[j_idx])
+            )
+            self.joint_abs_tau_sum[name] = self.joint_abs_tau_sum.get(name, 0.0) + abs(
+                float(tau[j_idx])
+            )
+            self.joint_max_vel[name] = max(
+                self.joint_max_vel.get(name, 0.0), abs(float(omega[j_idx]))
+            )
+            self.joint_max_tau[name] = max(
+                self.joint_max_tau.get(name, 0.0), abs(float(tau[j_idx]))
+            )
             dir_dict = self.joint_dir_counts.setdefault(name, {"pos": 0, "neg": 0})
             if omega[j_idx] >= 0:
                 dir_dict["pos"] += 1
@@ -235,7 +250,11 @@ class DrawerVaseArmEnv:
 
         limb_energy_step = {k: 0.0 for k in LIMB_GROUPS}
         for limb, jids in LIMB_GROUPS.items():
-            mask = [self.controlled_joint_ids.index(j) for j in jids if j in self.controlled_joint_ids]
+            mask = [
+                self.controlled_joint_ids.index(j)
+                for j in jids
+                if j in self.controlled_joint_ids
+            ]
             limb_power = float(np.sum(power[mask])) if mask else 0.0
             self.limb_power_sum_W[limb] += limb_power
             self.limb_peak_power_W[limb] = max(self.limb_peak_power_W[limb], limb_power)
@@ -286,14 +305,20 @@ class DrawerVaseArmEnv:
             "attempts": self.attempts,
             "errors": self.errors,
             "energy_Wh": self.energy_Wh,
-            "energy_Wh_per_unit": self.energy_Wh / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+            "energy_Wh_per_unit": self.energy_Wh / max(self.completed, 1e-6)
+            if self.completed > 0
+            else 0.0,
             "limb_energy_Wh": self.limb_energy_Wh,
             "skill_energy_Wh": self.skill_energy_Wh,
             "energy_per_limb": {
                 limb: {
                     "Wh": self.limb_energy_Wh[limb],
-                    "Wh_per_unit": self.limb_energy_Wh[limb] / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                    "Wh_per_hour": self.limb_energy_Wh[limb] / max(time_hours, 1e-6) if time_hours > 0 else 0.0,
+                    "Wh_per_unit": self.limb_energy_Wh[limb] / max(self.completed, 1e-6)
+                    if self.completed > 0
+                    else 0.0,
+                    "Wh_per_hour": self.limb_energy_Wh[limb] / max(time_hours, 1e-6)
+                    if time_hours > 0
+                    else 0.0,
                     "power_sum_W": self.limb_power_sum_W.get(limb, 0.0),
                     "power_peak_W": self.limb_peak_power_W.get(limb, 0.0),
                 }
@@ -303,30 +328,53 @@ class DrawerVaseArmEnv:
             "energy_per_joint": {
                 name: {
                     "Wh": self.joint_energy_Wh.get(name, 0.0),
-                    "Wh_per_unit": self.joint_energy_Wh.get(name, 0.0) / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                    "Wh_per_hour": self.joint_energy_Wh.get(name, 0.0) / max(time_hours, 1e-6) if time_hours > 0 else 0.0,
-                    "avg_power_W": self.joint_power_sum_W.get(name, 0.0) / max(self.step_count, 1),
+                    "Wh_per_unit": self.joint_energy_Wh.get(name, 0.0)
+                    / max(self.completed, 1e-6)
+                    if self.completed > 0
+                    else 0.0,
+                    "Wh_per_hour": self.joint_energy_Wh.get(name, 0.0)
+                    / max(time_hours, 1e-6)
+                    if time_hours > 0
+                    else 0.0,
+                    "avg_power_W": self.joint_power_sum_W.get(name, 0.0)
+                    / max(self.step_count, 1),
                     "peak_power_W": self.joint_peak_power_W.get(name, 0.0),
-                    "avg_abs_velocity": self.joint_abs_vel_sum.get(name, 0.0) / max(self.step_count, 1),
+                    "avg_abs_velocity": self.joint_abs_vel_sum.get(name, 0.0)
+                    / max(self.step_count, 1),
                     "max_abs_velocity": self.joint_max_vel.get(name, 0.0),
-                    "avg_abs_torque": self.joint_abs_tau_sum.get(name, 0.0) / max(self.step_count, 1),
+                    "avg_abs_torque": self.joint_abs_tau_sum.get(name, 0.0)
+                    / max(self.step_count, 1),
                     "max_abs_torque": self.joint_max_tau.get(name, 0.0),
-                    "directionality": self.joint_dir_counts.get(name, {"pos": 0, "neg": 0}),
+                    "directionality": self.joint_dir_counts.get(
+                        name, {"pos": 0, "neg": 0}
+                    ),
                 }
                 for name in self.joint_energy_Wh.keys()
             },
             "energy_per_effector": {
                 "ee_main": {
                     "Wh": self.effector_energy_Wh["ee_main"],
-                    "Wh_per_unit": self.effector_energy_Wh["ee_main"] / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                    "Wh_per_hour": self.effector_energy_Wh["ee_main"] / max(time_hours, 1e-6) if time_hours > 0 else 0.0,
+                    "Wh_per_unit": self.effector_energy_Wh["ee_main"]
+                    / max(self.completed, 1e-6)
+                    if self.completed > 0
+                    else 0.0,
+                    "Wh_per_hour": self.effector_energy_Wh["ee_main"]
+                    / max(time_hours, 1e-6)
+                    if time_hours > 0
+                    else 0.0,
                 }
             },
             "coordination_metrics": {
                 "mean_active_joints": float(np.mean(np.abs([0.0]))),
                 "mean_joint_velocity_corr": 0.0,
             },
-            "terminated_reason": "success" if self.success else ("vase_broken" if not self.vase_intact else ("max_steps" if self.step_count >= self.max_steps else None)),
+            "terminated_reason": "success"
+            if self.success
+            else (
+                "vase_broken"
+                if not self.vase_intact
+                else ("max_steps" if self.step_count >= self.max_steps else None)
+            ),
             "mpl_t": mpl_t,
             "ep_t": ep_t,
             "success": self.success,

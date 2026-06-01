@@ -5,9 +5,9 @@ Deterministic head selection keyed by ConditionVector.skill_mode with optional
 default fallback. Reward/econ math untouched: heads only emit action/value
 distributions.
 """
+
 from typing import Dict, Optional
 
-import torch
 import torch.nn as nn
 
 from src.observation.condition_vector import ConditionVector
@@ -89,7 +89,10 @@ class HydraActor(nn.Module):
         if head_key not in self.heads:
             if self.strict:
                 raise KeyError(f"Missing Hydra head for skill_mode={head_key}")
-            head_key = self.default_skill_mode or (sorted(self.heads.keys()) or [None])[0]
+            available_heads = sorted(self.heads.keys())
+            head_key = self.default_skill_mode or (
+                available_heads[0] if available_heads else ""
+            )
         head = _module_get(self.heads, head_key)
         if head is None:
             raise KeyError("HydraActor has no registered heads.")
@@ -129,7 +132,10 @@ class HydraCritic(nn.Module):
         if head_key not in self.heads:
             if self.strict:
                 raise KeyError(f"Missing Hydra critic head for skill_mode={head_key}")
-            head_key = self.default_skill_mode or (sorted(self.heads.keys()) or [None])[0]
+            available_heads = sorted(self.heads.keys())
+            head_key = self.default_skill_mode or (
+                available_heads[0] if available_heads else ""
+            )
         head = _module_get(self.heads, head_key)
         if head is None:
             raise KeyError("HydraCritic has no registered heads.")

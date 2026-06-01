@@ -1,5 +1,84 @@
 # Economic World Model Progress Log
 
+## 2026-06-01 - RL package static cleanup
+
+- **Changed**:
+  - cleared RL-local mypy findings in Hydra losses/heads, sampler policy training/runtime, and episode sampling
+  - cleared all `src/rl` ruff findings
+  - kept sampler/Hydra outputs bounded and advisory; reward math and controller semantics were not changed
+- **Why this matters**:
+  - RL trainer/runtime support no longer contributes full-repo static noise, while preserving the no-promotion/no-reward-mutation boundary
+  - the full `src/` mypy residual dropped to `117 errors in 63 files`; full ruff residual dropped to `189` issues
+- **Boundary**:
+  - no training run, policy promotion, reward equation change, controller change, weight write, GPU/provider/hardware execution, or Phase B math mutation occurred
+- **Verification**:
+  - `python3 -m ruff check src/rl` (`All checks passed!`)
+  - `python3 -m compileall src/rl -q`
+  - `python3 -m mypy --follow-imports=silent src/rl --show-error-codes --no-error-summary` (`0` RL-local errors; remaining lines are imported dependency debt)
+  - `python3 -m pytest -q tests/test_weights.py tests/test_sampler_policy.py tests/test_train_sampler_policy.py tests/test_sampling_determinism_seeded.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_shadow_offline_rl.py tests/test_shadow_replay_policy.py` (`13 passed`)
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` (`117` actual `error:` records in `63` files)
+  - `python3 -m ruff check . --output-format=json` (`189` issues)
+
+## 2026-06-01 - Environment package static cleanup
+
+- **Changed**:
+  - cleared env-local mypy findings across workcell sensors, dishwashing curriculum envs, LSD geometry/vector-scene envs, video wrappers, and PyBullet backend wrappers
+  - cleared all `src/envs` ruff findings, mostly unused imports/locals and support-surface annotations
+  - preserved fixed-base dishwashing/workcell/LSD envs as curriculum/regression producers rather than G1 hardware or bipedal proof
+- **Why this matters**:
+  - environment/curriculum producers are no longer a static-noise source for later lower-WM runs
+  - the full `src/` mypy residual dropped to `132 errors in 68 files`; full ruff residual dropped to `197` issues
+- **Boundary**:
+  - no Isaac, MuJoCo, PyBullet, ROS2, Unitree, provider, GPU, or hardware proof was claimed
+  - PyBullet import gaps remain honest missing dependency/stub conditions where applicable
+- **Verification**:
+  - `python3 -m ruff check src/envs` (`All checks passed!`)
+  - `python3 -m compileall src/envs -q`
+  - `python3 -m mypy --follow-imports=silent src/envs --show-error-codes --no-error-summary` (`0` env-local errors; remaining lines are imported dependency debt)
+  - `python3 -m pytest -q tests/envs tests/test_lsd3d_geometry.py tests/test_lsd_vector_scene_env.py tests/test_lsd_integration.py tests/test_workcell_paramount.py tests/test_env_regality_compliance.py tests/test_g1_primary_environment.py` (`121 passed, 1 skipped`)
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` (`132` actual `error:` records in `68` files)
+  - `python3 -m ruff check . --output-format=json` (`197` issues)
+
+## 2026-06-01 - VLA package static cleanup
+
+- **Changed**:
+  - cleared VLA-local mypy findings by typing optional torch fallback bases, using Python 3.9-compatible annotations, narrowing optional MetaDINO model/processor values, and widening mixed teacher-runtime payloads
+  - cleaned all `src/vla` ruff findings: unused imports, unused locals, and import-order issues
+  - preserved OpenVLA/teacher outputs as external advisory/provider surfaces; no VLA output was made native truth
+- **Why this matters**:
+  - the VLA advisory/provider layer is no longer a full-repo static-noise source, while still preserving explicit unavailable-provider posture
+  - the full `src/` mypy residual dropped to `150 errors in 77 files`; full ruff residual dropped to `223` issues
+- **Boundary**:
+  - no OpenVLA provider ran, no GPU training ran, no teacher runtime was promoted, no weights were written, and no live authority changed
+  - VLA/teacher proof remains blocked on real provider execution and corresponding receipts
+- **Verification**:
+  - `python3 -m ruff check src/vla` (`All checks passed!`)
+  - `python3 -m compileall src/vla -q`
+  - `python3 -m mypy --follow-imports=silent src/vla --show-error-codes --no-error-summary` (`0` VLA-local errors; remaining lines are imported dependency debt)
+  - `python3 -m pytest -q tests/test_vla_backend_policy.py tests/test_teacher_runtime.py tests/test_rollout_labeler.py tests/test_train_vla_recap_offline.py tests/test_vla_semantic_evidence.py` (`17 passed`)
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` (`150` actual `error:` records in `77` files)
+  - `python3 -m ruff check . --output-format=json` (`223` issues)
+
+## 2026-06-01 - Vision package mypy and ruff burn-down
+
+- **Changed**:
+  - cleared the `src/vision` mypy cluster by typing optional PyTorch fallback bases, narrowing metadata dictionaries, avoiding tensor/list variable reuse, and casting NumPy scalar operations where needed
+  - cleaned the remaining `src/vision` ruff surface, mostly unused imports and unused locals across NAG, SceneIR, dataset builder, and BiFPN support files
+  - preserved the package as Perception/Grounding producer/advisory support; no provider output was reclassified as native truth
+- **Why this matters**:
+  - Perception/Grounding support code is no longer a full-repo static-noise source, which makes the next VLA/env/rl mypy tranches easier to separate from provider or GPU proof gaps
+  - the full `src/` mypy residual dropped to `172 errors in 85 files`; full ruff residual dropped to `232` issues
+- **Boundary**:
+  - no GPU training, provider execution, hardware execution, weight writes, Phase B math mutation, promotion, live policy authority, or Phase 7 abstraction expansion occurred
+  - the focused vision tests are CPU/local proof only; real SAM/DINO/V-JEPA/OpenVLA/Isaac evidence remains unavailable until provider/RunPod prerequisites are satisfied
+- **Verification**:
+  - `python3 -m mypy --follow-imports=silent src/vision` (`Success: no issues found in 62 source files`)
+  - `python3 -m ruff check src/vision` (`All checks passed!`)
+  - `python3 -m compileall src/vision -q`
+  - `python3 -m pytest tests/vision tests/test_nag_core.py tests/test_nag_lsd_integration.py tests/test_vision_backbone_projection_proof_of_life_smoke.py -q` (`152 passed`)
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` (`172` actual `error:` records in `85` files)
+  - `python3 -m ruff check . --output-format=json` (`232` issues)
+
 ## 2026-06-01 - WM subsystem debt sweep and local receipt joins
 
 - **Changed**:

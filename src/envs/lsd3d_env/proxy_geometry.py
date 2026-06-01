@@ -7,16 +7,13 @@ Converts SceneGraph to voxel grids and meshes for LSD-3D style rendering.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
 from src.scene.vector_scene.graph import (
     DEFAULT_NODE_WIDTHS,
-    NodeType,
     SceneGraph,
-    SceneNode,
-    SceneObject,
 )
 
 
@@ -31,6 +28,7 @@ class VoxelGrid:
         voxel_size: Size of each voxel in world units
         shape: Grid dimensions (nx, ny, nz)
     """
+
     data: np.ndarray  # (nx, ny, nz) uint8 or float32
     origin: Tuple[float, float, float]
     voxel_size: float
@@ -55,9 +53,11 @@ class VoxelGrid:
 
     def is_valid_index(self, ix: int, iy: int, iz: int) -> bool:
         """Check if voxel indices are within bounds."""
-        return (0 <= ix < self.shape[0] and
-                0 <= iy < self.shape[1] and
-                0 <= iz < self.shape[2])
+        return (
+            0 <= ix < self.shape[0]
+            and 0 <= iy < self.shape[1]
+            and 0 <= iz < self.shape[2]
+        )
 
     def set_voxel(self, ix: int, iy: int, iz: int, value: float = 1.0) -> None:
         """Set a voxel value if indices are valid."""
@@ -68,7 +68,9 @@ class VoxelGrid:
         """Return number of occupied voxels."""
         return int(np.sum(self.data > 0))
 
-    def get_bounding_box(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    def get_bounding_box(
+        self,
+    ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
         """Return world-space bounding box of the grid."""
         min_corner = self.origin
         max_corner = (
@@ -91,6 +93,7 @@ class Mesh:
         colors: (N, 3) or (N, 4) array of vertex colors (optional)
         face_normals: (M, 3) array of face normals (computed if not provided)
     """
+
     vertices: np.ndarray  # (N, 3) float32
     faces: np.ndarray  # (M, 3) int32
     normals: Optional[np.ndarray] = None  # (N, 3) float32
@@ -135,7 +138,9 @@ class Mesh:
         counts = np.maximum(counts, 1)[:, np.newaxis]
         vertex_normals = vertex_normals / counts
         norms = np.linalg.norm(vertex_normals, axis=1, keepdims=True)
-        self.normals = np.divide(vertex_normals, norms, where=norms > 1e-8, out=vertex_normals)
+        self.normals = np.divide(
+            vertex_normals, norms, where=norms > 1e-8, out=vertex_normals
+        )
 
     def get_bounding_box(self) -> Tuple[np.ndarray, np.ndarray]:
         """Return min and max corners of the mesh bounding box."""
@@ -281,7 +286,11 @@ def scene_graph_to_voxels(
 
     # Rasterize nodes (corridors, rooms, etc.)
     for node in graph.nodes:
-        width = node.width if node.width is not None else DEFAULT_NODE_WIDTHS.get(node.node_type, 2.0)
+        width = (
+            node.width
+            if node.width is not None
+            else DEFAULT_NODE_WIDTHS.get(node.node_type, 2.0)
+        )
         height = node.height if node.height is not None else default_height
 
         _rasterize_polyline_corridor(
@@ -325,8 +334,8 @@ def voxels_to_mesh(
     Returns:
         Mesh with vertices, faces, and computed normals
     """
-    vertices = []
-    faces = []
+    vertices: list[list[float]] = []
+    faces: list[list[int]] = []
 
     occupied = voxels.data > threshold
     nx, ny, nz = voxels.shape
@@ -347,72 +356,84 @@ def voxels_to_mesh(
                 # -X face
                 if ix == 0 or not occupied[ix - 1, iy, iz]:
                     v_base = len(vertices)
-                    vertices.extend([
-                        [cx - half, cy - half, cz - half],
-                        [cx - half, cy + half, cz - half],
-                        [cx - half, cy + half, cz + half],
-                        [cx - half, cy - half, cz + half],
-                    ])
+                    vertices.extend(
+                        [
+                            [cx - half, cy - half, cz - half],
+                            [cx - half, cy + half, cz - half],
+                            [cx - half, cy + half, cz + half],
+                            [cx - half, cy - half, cz + half],
+                        ]
+                    )
                     faces.append([v_base, v_base + 2, v_base + 1])
                     faces.append([v_base, v_base + 3, v_base + 2])
 
                 # +X face
                 if ix == nx - 1 or not occupied[ix + 1, iy, iz]:
                     v_base = len(vertices)
-                    vertices.extend([
-                        [cx + half, cy - half, cz - half],
-                        [cx + half, cy + half, cz - half],
-                        [cx + half, cy + half, cz + half],
-                        [cx + half, cy - half, cz + half],
-                    ])
+                    vertices.extend(
+                        [
+                            [cx + half, cy - half, cz - half],
+                            [cx + half, cy + half, cz - half],
+                            [cx + half, cy + half, cz + half],
+                            [cx + half, cy - half, cz + half],
+                        ]
+                    )
                     faces.append([v_base, v_base + 1, v_base + 2])
                     faces.append([v_base, v_base + 2, v_base + 3])
 
                 # -Y face
                 if iy == 0 or not occupied[ix, iy - 1, iz]:
                     v_base = len(vertices)
-                    vertices.extend([
-                        [cx - half, cy - half, cz - half],
-                        [cx + half, cy - half, cz - half],
-                        [cx + half, cy - half, cz + half],
-                        [cx - half, cy - half, cz + half],
-                    ])
+                    vertices.extend(
+                        [
+                            [cx - half, cy - half, cz - half],
+                            [cx + half, cy - half, cz - half],
+                            [cx + half, cy - half, cz + half],
+                            [cx - half, cy - half, cz + half],
+                        ]
+                    )
                     faces.append([v_base, v_base + 1, v_base + 2])
                     faces.append([v_base, v_base + 2, v_base + 3])
 
                 # +Y face
                 if iy == ny - 1 or not occupied[ix, iy + 1, iz]:
                     v_base = len(vertices)
-                    vertices.extend([
-                        [cx - half, cy + half, cz - half],
-                        [cx + half, cy + half, cz - half],
-                        [cx + half, cy + half, cz + half],
-                        [cx - half, cy + half, cz + half],
-                    ])
+                    vertices.extend(
+                        [
+                            [cx - half, cy + half, cz - half],
+                            [cx + half, cy + half, cz - half],
+                            [cx + half, cy + half, cz + half],
+                            [cx - half, cy + half, cz + half],
+                        ]
+                    )
                     faces.append([v_base, v_base + 2, v_base + 1])
                     faces.append([v_base, v_base + 3, v_base + 2])
 
                 # -Z face (floor)
                 if iz == 0 or not occupied[ix, iy, iz - 1]:
                     v_base = len(vertices)
-                    vertices.extend([
-                        [cx - half, cy - half, cz - half],
-                        [cx + half, cy - half, cz - half],
-                        [cx + half, cy + half, cz - half],
-                        [cx - half, cy + half, cz - half],
-                    ])
+                    vertices.extend(
+                        [
+                            [cx - half, cy - half, cz - half],
+                            [cx + half, cy - half, cz - half],
+                            [cx + half, cy + half, cz - half],
+                            [cx - half, cy + half, cz - half],
+                        ]
+                    )
                     faces.append([v_base, v_base + 2, v_base + 1])
                     faces.append([v_base, v_base + 3, v_base + 2])
 
                 # +Z face (ceiling)
                 if iz == nz - 1 or not occupied[ix, iy, iz + 1]:
                     v_base = len(vertices)
-                    vertices.extend([
-                        [cx - half, cy - half, cz + half],
-                        [cx + half, cy - half, cz + half],
-                        [cx + half, cy + half, cz + half],
-                        [cx - half, cy + half, cz + half],
-                    ])
+                    vertices.extend(
+                        [
+                            [cx - half, cy - half, cz + half],
+                            [cx + half, cy - half, cz + half],
+                            [cx + half, cy + half, cz + half],
+                            [cx - half, cy + half, cz + half],
+                        ]
+                    )
                     faces.append([v_base, v_base + 1, v_base + 2])
                     faces.append([v_base, v_base + 2, v_base + 3])
 

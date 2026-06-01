@@ -4,21 +4,32 @@ Affordance Head for Vision-Based HRL.
 Predicts handle graspability and interaction affordances.
 """
 
+from typing import Any
+
 import numpy as np
 
+_torch: Any
+_torch_nn: Any
+_torch_F: Any
 try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _torch_F
+
     TORCH_AVAILABLE = True
 except ImportError:
+    _torch = None
+    _torch_nn = None
+    _torch_F = None
     TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
+
+torch = _torch
+nn = _torch_nn
+F = _torch_F
+_NN_MODULE: Any = nn.Module if TORCH_AVAILABLE else object
 
 
-class AffordanceHead(nn.Module if TORCH_AVAILABLE else object):
+class AffordanceHead(_NN_MODULE):
     """
     Predicts interaction affordances (graspability, pushability, etc.).
 
@@ -36,7 +47,7 @@ class AffordanceHead(nn.Module if TORCH_AVAILABLE else object):
         in_channels=128,
         hidden_channels=64,
         out_size=(16, 16),
-        num_affordance_types=3  # grasp, push, pull
+        num_affordance_types=3,  # grasp, push, pull
     ):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for AffordanceHead")
@@ -57,14 +68,14 @@ class AffordanceHead(nn.Module if TORCH_AVAILABLE else object):
         )
 
         # Affordance-specific heads
-        self.affordance_convs = nn.ModuleList([
-            nn.Conv2d(32, 1, 1) for _ in range(num_affordance_types)
-        ])
+        self.affordance_convs = nn.ModuleList(
+            [nn.Conv2d(32, 1, 1) for _ in range(num_affordance_types)]
+        )
 
         # Combined affordance (weighted sum)
         self.combined_conv = nn.Conv2d(32, 1, 1)
 
-        self.upsample = nn.Upsample(size=out_size, mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(size=out_size, mode="bilinear", align_corners=False)
 
     def forward(self, features, return_all=False):
         """
@@ -132,7 +143,7 @@ class AffordanceMapGenerator:
         self,
         image_size=(128, 128),
         handle_radius=0.05,  # meters
-        affordance_spread=0.1  # meters
+        affordance_spread=0.1,  # meters
     ):
         self.image_size = image_size
         self.handle_radius = handle_radius
@@ -166,7 +177,7 @@ class AffordanceMapGenerator:
                 if 0 <= x < W and 0 <= y < H:
                     dist = np.sqrt(dx**2 + dy**2)
                     # Gaussian centered on handle
-                    affordance = np.exp(-dist**2 / (2 * radius_pixels**2))
+                    affordance = np.exp(-(dist**2) / (2 * radius_pixels**2))
                     grasp_map[y, x] = affordance
 
         return grasp_map
@@ -204,8 +215,9 @@ class AffordanceMapGenerator:
                     dist_along = abs(dy)
 
                     # Higher affordance along push direction
-                    affordance = np.exp(-dist_perp**2 / (spread_pixels**2)) * \
-                                np.exp(-dist_along**2 / (spread_pixels * 2)**2)
+                    affordance = np.exp(-(dist_perp**2) / (spread_pixels**2)) * np.exp(
+                        -(dist_along**2) / (spread_pixels * 2) ** 2
+                    )
                     push_map[y, x] = affordance
 
         return push_map
@@ -243,7 +255,7 @@ class AffordanceMapGenerator:
                     # Penalty factor
                     if dist < safety_pixels:
                         penalty = 1.0 - (dist / safety_pixels)
-                        grasp_map[y, x] *= (1.0 - penalty)
+                        grasp_map[y, x] *= 1.0 - penalty
 
         return grasp_map
 

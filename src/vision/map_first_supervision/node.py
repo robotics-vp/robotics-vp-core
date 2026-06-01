@@ -1,4 +1,5 @@
 """Map-First Pseudo-Supervision Node."""
+
 from __future__ import annotations
 
 import json
@@ -45,7 +46,9 @@ def _get_attr(obj: Any, key: str) -> Any:
     return getattr(obj, key, None)
 
 
-def _build_camera_params(episode_assets: Any, num_frames: int) -> Optional[CameraParams]:
+def _build_camera_params(
+    episode_assets: Any, num_frames: int
+) -> Optional[CameraParams]:
     if episode_assets is None:
         return None
     cam_params = _get_attr(episode_assets, "camera_params")
@@ -54,12 +57,16 @@ def _build_camera_params(episode_assets: Any, num_frames: int) -> Optional[Camer
     if isinstance(cam_params, dict):
         if "world_from_cam" in cam_params:
             cam_params = cam_params.copy()
-            world_from_cam = np.asarray(cam_params["world_from_cam"], dtype=np.float32)
-            cam_params["world_from_cam"] = world_from_cam
+            world_from_cam_arr = np.asarray(
+                cam_params["world_from_cam"], dtype=np.float32
+            )
+            cam_params["world_from_cam"] = world_from_cam_arr
             return CameraParams(**cam_params)
 
     intrinsics = _get_attr(episode_assets, "camera_intrinsics")
-    extrinsics = _get_attr(episode_assets, "camera_extrinsics") or _get_attr(episode_assets, "camera_pose")
+    extrinsics = _get_attr(episode_assets, "camera_extrinsics") or _get_attr(
+        episode_assets, "camera_pose"
+    )
     if intrinsics is None or extrinsics is None:
         return None
 
@@ -83,19 +90,29 @@ def _build_camera_params(episode_assets: Any, num_frames: int) -> Optional[Camer
     if cy is None:
         cy = height / 2.0
 
-    world_from_cam = None
+    world_from_cam: Optional[np.ndarray] = None
     if isinstance(extrinsics, dict) and "world_from_cam" in extrinsics:
         world_from_cam = np.asarray(extrinsics["world_from_cam"], dtype=np.float32)
     elif isinstance(extrinsics, dict):
-        translation = np.asarray(extrinsics.get("translation", [0.0, 0.0, 0.0]), dtype=np.float32)
-        rotation_rpy = np.asarray(extrinsics.get("rotation_rpy", [0.0, 0.0, 0.0]), dtype=np.float32)
+        translation = np.asarray(
+            extrinsics.get("translation", [0.0, 0.0, 0.0]), dtype=np.float32
+        )
+        rotation_rpy = np.asarray(
+            extrinsics.get("rotation_rpy", [0.0, 0.0, 0.0]), dtype=np.float32
+        )
         roll, pitch, yaw = rotation_rpy
         cr, sr = np.cos(roll), np.sin(roll)
         cp, sp = np.cos(pitch), np.sin(pitch)
         cyw, syw = np.cos(yaw), np.sin(yaw)
-        Rz = np.array([[cyw, -syw, 0.0], [syw, cyw, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
-        Ry = np.array([[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]], dtype=np.float32)
-        Rx = np.array([[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]], dtype=np.float32)
+        Rz = np.array(
+            [[cyw, -syw, 0.0], [syw, cyw, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32
+        )
+        Ry = np.array(
+            [[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]], dtype=np.float32
+        )
+        Rx = np.array(
+            [[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]], dtype=np.float32
+        )
         R = Rz @ Ry @ Rx
         world_from_cam = np.eye(4, dtype=np.float32)
         world_from_cam[:3, :3] = R
@@ -103,6 +120,8 @@ def _build_camera_params(episode_assets: Any, num_frames: int) -> Optional[Camer
     else:
         world_from_cam = np.asarray(extrinsics, dtype=np.float32)
 
+    if world_from_cam is None:
+        return None
     if world_from_cam.ndim == 2:
         world_from_cam = world_from_cam[np.newaxis, ...]
     if world_from_cam.shape[0] == 1 and num_frames > 1:
@@ -145,16 +164,25 @@ def _extract_semantic_inputs(
     if isinstance(optional_semantics, np.ndarray):
         return optional_semantics, None, None, None
     if isinstance(optional_semantics, dict):
-        evidence = parse_vla_semantic_evidence(optional_semantics, scene_track_ids=getattr(scene_tracks, "track_ids", None))
+        evidence = parse_vla_semantic_evidence(
+            optional_semantics, scene_track_ids=getattr(scene_tracks, "track_ids", None)
+        )
         if evidence is not None and evidence.class_probs is not None:
-            return evidence.class_probs, evidence.confidence, optional_semantics.get("point_labels"), evidence
+            return (
+                evidence.class_probs,
+                evidence.confidence,
+                optional_semantics.get("point_labels"),
+                evidence,
+            )
         return (
             optional_semantics.get("entity_class_probs"),
             optional_semantics.get("entity_confidence"),
             optional_semantics.get("point_labels"),
             None,
         )
-    evidence = parse_vla_semantic_evidence(optional_semantics, scene_track_ids=getattr(scene_tracks, "track_ids", None))
+    evidence = parse_vla_semantic_evidence(
+        optional_semantics, scene_track_ids=getattr(scene_tracks, "track_ids", None)
+    )
     if evidence is not None and evidence.class_probs is not None:
         return evidence.class_probs, evidence.confidence, None, evidence
     return None, None, None, None
@@ -173,9 +201,15 @@ def _accumulate_static_map(
     visibility = getattr(scene_tracks, "visibility", None)
     occlusion = getattr(scene_tracks, "occlusion", None)
     if visibility is None:
-        visibility = np.ones((scene_tracks.poses_t.shape[0], scene_tracks.poses_t.shape[1]), dtype=np.float32)
+        visibility = np.ones(
+            (scene_tracks.poses_t.shape[0], scene_tracks.poses_t.shape[1]),
+            dtype=np.float32,
+        )
     if occlusion is None:
-        occlusion = np.zeros((scene_tracks.poses_t.shape[0], scene_tracks.poses_t.shape[1]), dtype=np.float32)
+        occlusion = np.zeros(
+            (scene_tracks.poses_t.shape[0], scene_tracks.poses_t.shape[1]),
+            dtype=np.float32,
+        )
 
     T, K = scene_tracks.poses_t.shape[:2]
     for t in range(T):
@@ -192,7 +226,9 @@ def _accumulate_static_map(
                     confidence = None
                     if entity_confidence is not None:
                         confidence = float(entity_confidence[t, k])
-                    semantics_stabilizer.update_from_entity_probs(points, class_probs, confidence=confidence)
+                    semantics_stabilizer.update_from_entity_probs(
+                        points, class_probs, confidence=confidence
+                    )
 
 
 def _update_map_with_point_labels(
@@ -214,7 +250,9 @@ def _update_map_with_point_labels(
         semantics_stabilizer.update_from_point_labels(points, labels)
 
 
-def _compute_boxes3d(scene_tracks: Any, geometry_provider: GeometryProvider) -> np.ndarray:
+def _compute_boxes3d(
+    scene_tracks: Any, geometry_provider: GeometryProvider
+) -> np.ndarray:
     poses_R = scene_tracks.poses_R
     poses_t = scene_tracks.poses_t
     T, K = poses_t.shape[:2]
@@ -265,7 +303,9 @@ def _compute_semantics_stable(
     return semantics_stable
 
 
-def _compute_semantic_stability(semantics_stable: Optional[np.ndarray]) -> Optional[np.ndarray]:
+def _compute_semantic_stability(
+    semantics_stable: Optional[np.ndarray],
+) -> Optional[np.ndarray]:
     if semantics_stable is None or semantics_stable.size == 0:
         return None
     return np.max(semantics_stable, axis=-1).astype(np.float32)
@@ -292,18 +332,26 @@ class MapFirstPseudoSupervisionNode:
         output_path: Optional[str] = None,
     ) -> MapFirstRunOutput:
         scene_tracks_lite = _ensure_scene_tracks_lite(scene_tracks)
-        geometry_provider = self.geometry_provider or PrimitiveGeometryProvider(scene_tracks_lite)
-
-        entity_class_probs, entity_confidence, point_labels, vla_evidence = _extract_semantic_inputs(
-            optional_semantics,
-            scene_tracks_lite,
+        geometry_provider = self.geometry_provider or PrimitiveGeometryProvider(
+            scene_tracks_lite
         )
-        semantics_enabled = self.config.semantics_enabled and (entity_class_probs is not None or point_labels is not None)
+
+        entity_class_probs, entity_confidence, point_labels, vla_evidence = (
+            _extract_semantic_inputs(
+                optional_semantics,
+                scene_tracks_lite,
+            )
+        )
+        semantics_enabled = self.config.semantics_enabled and (
+            entity_class_probs is not None or point_labels is not None
+        )
         semantics_num_classes = self.config.semantics_num_classes
         if semantics_enabled and entity_class_probs is not None:
             semantics_num_classes = int(entity_class_probs.shape[-1])
         if semantics_enabled and semantics_num_classes <= 0:
-            raise ValueError("semantics_num_classes must be > 0 when semantics are enabled")
+            raise ValueError(
+                "semantics_num_classes must be > 0 when semantics are enabled"
+            )
 
         map_store = VoxelHashMap(
             voxel_size=self.config.voxel_size,
@@ -359,7 +407,9 @@ class MapFirstPseudoSupervisionNode:
                 points_per_entity=self.points_per_entity,
             )
 
-        camera_params = _build_camera_params(episode_assets, scene_tracks_lite.num_frames)
+        camera_params = _build_camera_params(
+            episode_assets, scene_tracks_lite.num_frames
+        )
         densify_out = None
         if self.config.densify_enabled:
             if camera_params is not None and self.config.densify_mode == "depth_map":
@@ -370,7 +420,9 @@ class MapFirstPseudoSupervisionNode:
                     occlusion_culling=self.config.occlusion_culling,
                 )
             else:
-                densify_out = densify_world_points(map_store, scene_tracks_lite.num_frames)
+                densify_out = densify_world_points(
+                    map_store, scene_tracks_lite.num_frames
+                )
 
         semantics_stable = _compute_semantics_stable(
             scene_tracks_lite,
@@ -434,6 +486,11 @@ class MapFirstPseudoSupervisionNode:
         if output_path is None:
             output_path = "map_first_supervision_v1.npz"
 
-        np.savez_compressed(output_path, **artifact.to_npz(summary=summary, export_float16=self.config.export_float16))
+        np.savez_compressed(
+            output_path,
+            **artifact.to_npz(
+                summary=summary, export_float16=self.config.export_float16
+            ),
+        )
 
         return MapFirstRunOutput(artifact_path=output_path, summary=summary)

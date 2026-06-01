@@ -6,13 +6,14 @@ Renders NAG scenes by ray-plane intersection and alpha compositing.
 
 from __future__ import annotations
 
-from typing import Collection, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Collection, Dict, List, Optional, Tuple
 
 import numpy as np
 
 try:
     import torch
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -20,6 +21,9 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 from src.vision.nag.types import CameraParams, NAGNodeId
+
+if TYPE_CHECKING:
+    from src.vision.nag.scene import NAGScene
 
 
 def _check_torch() -> None:
@@ -56,7 +60,11 @@ def ray_plane_intersection(
 
     # Avoid division by zero
     valid_denom = torch.abs(denom) > 1e-8
-    t = torch.where(valid_denom, numer / (denom + 1e-8), torch.tensor(float("inf"), device=ray_origins.device))
+    t = torch.where(
+        valid_denom,
+        numer / (denom + 1e-8),
+        torch.tensor(float("inf"), device=ray_origins.device),
+    )
 
     # Valid if t > 0 (in front of camera)
     valid = valid_denom & (t > 0)
@@ -89,8 +97,6 @@ def render_scene(
     """
     _check_torch()
 
-    from src.vision.nag.scene import NAGScene
-
     device = t.device if isinstance(t, torch.Tensor) else torch.device("cpu")
     if not isinstance(t, torch.Tensor):
         t = torch.tensor(t, device=device)
@@ -114,7 +120,9 @@ def render_scene(
 
     # Get rays for frame 0 (assume static camera for simplicity)
     ray_origins_np, ray_dirs_np = camera.get_rays(t=0)
-    ray_origins = torch.from_numpy(ray_origins_np.astype(np.float32)).to(device)  # (H, W, 3)
+    ray_origins = torch.from_numpy(ray_origins_np.astype(np.float32)).to(
+        device
+    )  # (H, W, 3)
     ray_dirs = torch.from_numpy(ray_dirs_np.astype(np.float32)).to(device)  # (H, W, 3)
 
     # Initialize output buffers
@@ -124,7 +132,9 @@ def render_scene(
     node_index_buffer = torch.full((B, H, W), -1, dtype=torch.long, device=device)
 
     # Collect all hit info for depth sorting
-    all_hits: List[Tuple[int, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
+    all_hits: List[
+        Tuple[int, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    ] = []
 
     for node_idx, node_id in enumerate(nodes_to_render):
         node = scene.get_node(node_id)
@@ -147,8 +157,12 @@ def render_scene(
 
             # Transform to plane-local coordinates
             plane_from_world = torch.inverse(pose)
-            hit_points_homo = torch.cat([hit_points, torch.ones_like(hit_points[..., :1])], dim=-1)
-            hit_local = torch.einsum("ij,hwj->hwi", plane_from_world, hit_points_homo)[..., :3]
+            hit_points_homo = torch.cat(
+                [hit_points, torch.ones_like(hit_points[..., :1])], dim=-1
+            )
+            hit_local = torch.einsum("ij,hwj->hwi", plane_from_world, hit_points_homo)[
+                ..., :3
+            ]
 
             # Convert to UV (plane extent centered at origin)
             extent = torch.from_numpy(node.extent).to(device)
@@ -164,7 +178,9 @@ def render_scene(
 
             # Compute view direction in plane frame
             view_dir_world = -ray_dirs  # Direction from hit to camera
-            view_dir_local = torch.einsum("ij,hwj->hwi", plane_from_world[:3, :3], view_dir_world)
+            view_dir_local = torch.einsum(
+                "ij,hwj->hwi", plane_from_world[:3, :3], view_dir_world
+            )
 
             # Sample atlas for valid pixels
             rgb = torch.zeros(H, W, 3, device=device)
@@ -177,25 +193,41 @@ def render_scene(
                 rgb[valid] = valid_rgb
                 alpha[valid] = valid_alpha
 
-            all_hits.append((node_idx, hit_t.clone(), valid.clone(), rgb.clone(), alpha.clone(), torch.tensor(b)))
+            all_hits.append(
+                (
+                    node_idx,
+                    hit_t.clone(),
+                    valid.clone(),
+                    rgb.clone(),
+                    alpha.clone(),
+                    torch.tensor(b),
+                )
+            )
 
     # Sort hits by depth and composite front-to-back for each batch
     for b in range(B):
-        batch_hits = [(idx, ht, v, rgb, a) for idx, ht, v, rgb, a, bi in all_hits if bi == b]
+        batch_hits = [
+            (idx, ht, v, rgb, a) for idx, ht, v, rgb, a, bi in all_hits if bi == b
+        ]
 
         if not batch_hits:
             continue
 
         # Stack all hits
         num_hits = len(batch_hits)
-        all_depths = torch.stack([ht for _, ht, _, _, _ in batch_hits], dim=0)  # (N, H, W)
+        all_depths = torch.stack(
+            [ht for _, ht, _, _, _ in batch_hits], dim=0
+        )  # (N, H, W)
         all_valid = torch.stack([v for _, _, v, _, _ in batch_hits], dim=0)  # (N, H, W)
-        all_rgb = torch.stack([rgb for _, _, _, rgb, _ in batch_hits], dim=0)  # (N, H, W, 3)
+        all_rgb = torch.stack(
+            [rgb for _, _, _, rgb, _ in batch_hits], dim=0
+        )  # (N, H, W, 3)
         all_alpha = torch.stack([a for _, _, _, _, a in batch_hits], dim=0)  # (N, H, W)
-        all_node_idx = torch.tensor([idx for idx, _, _, _, _ in batch_hits], device=device)
 
         # Set invalid depths to infinity
-        all_depths = torch.where(all_valid, all_depths, torch.tensor(float("inf"), device=device))
+        all_depths = torch.where(
+            all_valid, all_depths, torch.tensor(float("inf"), device=device)
+        )
 
         # Sort by depth per pixel
         sorted_depths, sort_indices = torch.sort(all_depths, dim=0)  # (N, H, W)
@@ -217,7 +249,6 @@ def render_scene(
             alpha_n = sorted_alpha[n]  # (H, W)
             valid_n = sorted_valid[n]  # (H, W)
             depth_n = sorted_depths[n]  # (H, W)
-            node_idx_n = all_node_idx[sort_indices[n, 0, 0]]  # Approximate
 
             # Only contribute where valid and transmittance > 0
             mask = valid_n & (T > 1e-4)
@@ -263,7 +294,9 @@ def render_scene(
         "rgb": rgb_out,
         "depth": depth_out,
         "node_index": node_index_out,
-        "alpha": alpha_accum.unsqueeze(1) if not is_scalar else alpha_accum.unsqueeze(0),
+        "alpha": alpha_accum.unsqueeze(1)
+        if not is_scalar
+        else alpha_accum.unsqueeze(0),
     }
 
 

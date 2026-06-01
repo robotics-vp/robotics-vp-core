@@ -4,6 +4,7 @@ Task compiler for workcell environments.
 Converts natural language prompts or structured dicts into
 WorkcellEnvConfig + WorkcellSceneSpec + TaskGraphSpec.
 """
+
 from __future__ import annotations
 
 import re
@@ -13,12 +14,13 @@ from typing import Any, Dict, List, Optional
 from src.envs.workcell_env.config import WorkcellEnvConfig, PRESETS
 from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
 from src.envs.workcell_env.scene.generators import WorkcellSceneGenerator
-from src.envs.workcell_env.tasks.task_base import TaskSpec, TaskGraphSpec, ActionStepSpec
+from src.envs.workcell_env.tasks.task_base import TaskGraphSpec, ActionStepSpec
 
 
 @dataclass
 class CompilationResult:
     """Result of compiling a prompt or spec into workcell configuration."""
+
     config: WorkcellEnvConfig
     scene_spec: WorkcellSceneSpec
     task_graph: TaskGraphSpec
@@ -39,9 +41,13 @@ class WorkcellTaskCompiler:
 
     # Patterns for extracting parameters from prompts
     PATTERNS = {
-        "num_items": re.compile(r"(\d+)\s*(?:items?|parts?|widgets?|pieces?|objects?)", re.I),
+        "num_items": re.compile(
+            r"(\d+)\s*(?:items?|parts?|widgets?|pieces?|objects?)", re.I
+        ),
         "tolerance": re.compile(r"(\d+(?:\.\d+)?)\s*(?:mm|millimeter)", re.I),
-        "num_bins": re.compile(r"(\d+)\s*(?:bins?|boxes?|containers?|categories?)", re.I),
+        "num_bins": re.compile(
+            r"(\d+)\s*(?:bins?|boxes?|containers?|categories?)", re.I
+        ),
         "num_screws": re.compile(r"(\d+)\s*(?:screws?|fasteners?|bolts?)", re.I),
         "num_stations": re.compile(r"(\d+)\s*(?:stations?|benches?|cells?)", re.I),
     }
@@ -220,7 +226,9 @@ class WorkcellTaskCompiler:
     ) -> TaskGraphSpec:
         """Build kitting task graph: pick items, place in tray."""
         num_items = params.get("num_items", len(scene_spec.parts))
-        num_items = min(num_items, len(scene_spec.parts)) if scene_spec.parts else num_items
+        num_items = (
+            min(num_items, len(scene_spec.parts)) if scene_spec.parts else num_items
+        )
 
         nodes: List[ActionStepSpec] = []
         edges: List[tuple[str, str]] = []
@@ -229,26 +237,34 @@ class WorkcellTaskCompiler:
             pick_id = f"pick_{i}"
             place_id = f"place_{i}"
 
-            part_id = scene_spec.parts[i].id if i < len(scene_spec.parts) else f"part_{i}"
-            target_id = scene_spec.containers[0].id if scene_spec.containers else "tray_0"
+            part_id = (
+                scene_spec.parts[i].id if i < len(scene_spec.parts) else f"part_{i}"
+            )
+            target_id = (
+                scene_spec.containers[0].id if scene_spec.containers else "tray_0"
+            )
 
-            nodes.append(ActionStepSpec(
-                step_id=pick_id,
-                action_type="PICK",
-                target_object_id=part_id,
-            ))
-            nodes.append(ActionStepSpec(
-                step_id=place_id,
-                action_type="PLACE",
-                target_object_id=target_id,
-            ))
+            nodes.append(
+                ActionStepSpec(
+                    step_id=pick_id,
+                    action_type="PICK",
+                    target_object_id=part_id,
+                )
+            )
+            nodes.append(
+                ActionStepSpec(
+                    step_id=place_id,
+                    action_type="PLACE",
+                    target_object_id=target_id,
+                )
+            )
 
             edges.append((pick_id, place_id))
             if i > 0:
-                edges.append((f"place_{i-1}", pick_id))
+                edges.append((f"place_{i - 1}", pick_id))
 
         entry = "pick_0" if nodes else ""
-        exit_nodes = [f"place_{num_items-1}"] if nodes else []
+        exit_nodes = [f"place_{num_items - 1}"] if nodes else []
 
         return TaskGraphSpec(
             nodes=nodes, edges=edges, entry_node=entry, exit_nodes=exit_nodes
@@ -296,21 +312,37 @@ class WorkcellTaskCompiler:
             inspect_id = f"inspect_{i}"
             place_id = f"place_{i}"
 
-            nodes.extend([
-                ActionStepSpec(step_id=pick_id, action_type="PICK", target_object_id=f"item_{i}"),
-                ActionStepSpec(step_id=inspect_id, action_type="INSPECT", target_object_id=f"item_{i}"),
-                ActionStepSpec(step_id=place_id, action_type="PLACE", target_object_id="bin_classified"),
-            ])
+            nodes.extend(
+                [
+                    ActionStepSpec(
+                        step_id=pick_id,
+                        action_type="PICK",
+                        target_object_id=f"item_{i}",
+                    ),
+                    ActionStepSpec(
+                        step_id=inspect_id,
+                        action_type="INSPECT",
+                        target_object_id=f"item_{i}",
+                    ),
+                    ActionStepSpec(
+                        step_id=place_id,
+                        action_type="PLACE",
+                        target_object_id="bin_classified",
+                    ),
+                ]
+            )
 
-            edges.extend([
-                (pick_id, inspect_id),
-                (inspect_id, place_id),
-            ])
+            edges.extend(
+                [
+                    (pick_id, inspect_id),
+                    (inspect_id, place_id),
+                ]
+            )
             if i > 0:
-                edges.append((f"place_{i-1}", pick_id))
+                edges.append((f"place_{i - 1}", pick_id))
 
         entry = "pick_0" if nodes else ""
-        exit_nodes = [f"place_{num_items-1}"] if nodes else []
+        exit_nodes = [f"place_{num_items - 1}"] if nodes else []
 
         return TaskGraphSpec(
             nodes=nodes, edges=edges, entry_node=entry, exit_nodes=exit_nodes
@@ -323,10 +355,20 @@ class WorkcellTaskCompiler:
         num_screws = params.get("num_screws", 0)
 
         nodes = [
-            ActionStepSpec(step_id="pick_part_a", action_type="PICK", target_object_id="part_a"),
-            ActionStepSpec(step_id="place_part_a", action_type="PLACE", target_object_id="fixture_0"),
-            ActionStepSpec(step_id="pick_part_b", action_type="PICK", target_object_id="part_b"),
-            ActionStepSpec(step_id="insert_part_b", action_type="INSERT", target_object_id="part_a"),
+            ActionStepSpec(
+                step_id="pick_part_a", action_type="PICK", target_object_id="part_a"
+            ),
+            ActionStepSpec(
+                step_id="place_part_a",
+                action_type="PLACE",
+                target_object_id="fixture_0",
+            ),
+            ActionStepSpec(
+                step_id="pick_part_b", action_type="PICK", target_object_id="part_b"
+            ),
+            ActionStepSpec(
+                step_id="insert_part_b", action_type="INSERT", target_object_id="part_a"
+            ),
         ]
         edges = [
             ("pick_part_a", "place_part_a"),
@@ -337,11 +379,13 @@ class WorkcellTaskCompiler:
         last_step = "insert_part_b"
         for i in range(num_screws):
             fasten_id = f"fasten_{i}"
-            nodes.append(ActionStepSpec(
-                step_id=fasten_id,
-                action_type="FASTEN",
-                target_object_id=f"screw_{i}",
-            ))
+            nodes.append(
+                ActionStepSpec(
+                    step_id=fasten_id,
+                    action_type="FASTEN",
+                    target_object_id=f"screw_{i}",
+                )
+            )
             edges.append((last_step, fasten_id))
             last_step = fasten_id
 
@@ -366,21 +410,37 @@ class WorkcellTaskCompiler:
             inspect_id = f"inspect_{i}"
             place_id = f"place_{i}"
 
-            nodes.extend([
-                ActionStepSpec(step_id=pick_id, action_type="PICK", target_object_id=f"part_{i}"),
-                ActionStepSpec(step_id=inspect_id, action_type="INSPECT", target_object_id=f"part_{i}"),
-                ActionStepSpec(step_id=place_id, action_type="PLACE", target_object_id="pass_bin"),
-            ])
+            nodes.extend(
+                [
+                    ActionStepSpec(
+                        step_id=pick_id,
+                        action_type="PICK",
+                        target_object_id=f"part_{i}",
+                    ),
+                    ActionStepSpec(
+                        step_id=inspect_id,
+                        action_type="INSPECT",
+                        target_object_id=f"part_{i}",
+                    ),
+                    ActionStepSpec(
+                        step_id=place_id,
+                        action_type="PLACE",
+                        target_object_id="pass_bin",
+                    ),
+                ]
+            )
 
-            edges.extend([
-                (pick_id, inspect_id),
-                (inspect_id, place_id),
-            ])
+            edges.extend(
+                [
+                    (pick_id, inspect_id),
+                    (inspect_id, place_id),
+                ]
+            )
             if i > 0:
-                edges.append((f"place_{i-1}", pick_id))
+                edges.append((f"place_{i - 1}", pick_id))
 
         entry = "pick_0" if nodes else ""
-        exit_nodes = [f"place_{num_items-1}"] if nodes else []
+        exit_nodes = [f"place_{num_items - 1}"] if nodes else []
 
         return TaskGraphSpec(
             nodes=nodes, edges=edges, entry_node=entry, exit_nodes=exit_nodes

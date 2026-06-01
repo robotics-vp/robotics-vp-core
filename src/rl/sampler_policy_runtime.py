@@ -21,10 +21,14 @@ from src.rl.sampler_policy_training import (
     TORCH_AVAILABLE,
 )
 
+torch: Any
+_torch: Any
 if TORCH_AVAILABLE:  # pragma: no branch
-    import torch
+    import torch as _torch
 else:  # pragma: no cover
-    torch = None
+    _torch = None
+
+torch = _torch
 
 
 def _clamp01(value: Any) -> float:
@@ -48,7 +52,9 @@ class SamplerPolicyRuntimePackage:
     metadata: Dict[str, Any]
 
 
-def load_sampler_policy_runtime_package(path: str | Path) -> SamplerPolicyRuntimePackage:
+def load_sampler_policy_runtime_package(
+    path: str | Path,
+) -> SamplerPolicyRuntimePackage:
     package_path = Path(path)
     payload = json.loads(package_path.read_text(encoding="utf-8"))
     checkpoint_path = Path(str(payload.get("checkpoint_path") or ""))
@@ -62,7 +68,9 @@ def load_sampler_policy_runtime_package(path: str | Path) -> SamplerPolicyRuntim
         benchmark_gate=dict(payload.get("benchmark_gate", {}) or {}),
         execution_preconditions=dict(payload.get("execution_preconditions", {}) or {}),
         inference_contract=dict(payload.get("inference_contract", {}) or {}),
-        promotion_stage=str(payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"),
+        promotion_stage=str(
+            payload.get("promotion_stage", "shadow_candidate") or "shadow_candidate"
+        ),
         metadata=dict(payload.get("metadata", {}) or {}),
     )
 
@@ -73,16 +81,29 @@ class LoadedSamplerPolicyHelper:
             raise ImportError("PyTorch is required to load the sampler policy helper")
         checkpoint_path = Path(package.checkpoint_path)
         if not checkpoint_path.exists():
-            raise FileNotFoundError(f"sampler policy checkpoint not found: {checkpoint_path}")
-        payload = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
+            raise FileNotFoundError(
+                f"sampler policy checkpoint not found: {checkpoint_path}"
+            )
+        payload = torch.load(
+            str(checkpoint_path), map_location="cpu", weights_only=False
+        )
         hidden_dim = int(payload.get("hidden_dim", 32))
-        pool_input_dim = int(payload.get("pool_input_dim", len(SAMPLER_POOL_FEATURE_NAMES)))
+        pool_input_dim = int(
+            payload.get("pool_input_dim", len(SAMPLER_POOL_FEATURE_NAMES))
+        )
         episode_input_dim = int(
-            payload.get("episode_input_dim", len(SAMPLER_EPISODE_FEATURE_NAMES) + len(SAMPLER_POLICY_STRATEGIES))
+            payload.get(
+                "episode_input_dim",
+                len(SAMPLER_EPISODE_FEATURE_NAMES) + len(SAMPLER_POLICY_STRATEGIES),
+            )
         )
         self.package = package
-        self.pool_model = SamplerPolicyPoolNet(input_dim=pool_input_dim, hidden_dim=hidden_dim)
-        self.episode_model = SamplerPolicyEpisodeNet(input_dim=episode_input_dim, hidden_dim=hidden_dim)
+        self.pool_model = SamplerPolicyPoolNet(
+            input_dim=pool_input_dim, hidden_dim=hidden_dim
+        )
+        self.episode_model = SamplerPolicyEpisodeNet(
+            input_dim=episode_input_dim, hidden_dim=hidden_dim
+        )
         self.pool_model.load_state_dict(payload["pool_state_dict"])
         self.episode_model.load_state_dict(payload["episode_state_dict"])
         self.pool_model.eval()
@@ -101,7 +122,10 @@ class LoadedSamplerPolicyHelper:
             episodes,
             heuristic_strategy_distribution=heuristic_strategy_distribution,
         )
-        vector = np.asarray([float(feature_map.get(name, 0.0)) for name in SAMPLER_POOL_FEATURE_NAMES], dtype=np.float32)
+        vector = np.asarray(
+            [float(feature_map.get(name, 0.0)) for name in SAMPLER_POOL_FEATURE_NAMES],
+            dtype=np.float32,
+        )
         tensor = torch.from_numpy(vector).float().unsqueeze(0)
         with torch.no_grad():
             strategy_logits, plan_logits = self.pool_model(tensor)
@@ -110,21 +134,33 @@ class LoadedSamplerPolicyHelper:
         return {
             "strategy_distribution": {
                 strategy: _clamp01(score)
-                for strategy, score in zip(SAMPLER_POLICY_STRATEGIES, strategy_probs.tolist())
+                for strategy, score in zip(
+                    SAMPLER_POLICY_STRATEGIES, strategy_probs.tolist()
+                )
             },
             "sampling_plan": {
                 name: _clamp01(score)
-                for name, score in zip(SAMPLER_PLAN_PARAMETER_NAMES, plan_probs.tolist())
+                for name, score in zip(
+                    SAMPLER_PLAN_PARAMETER_NAMES, plan_probs.tolist()
+                )
             },
             "pool_feature_map": feature_map,
         }
 
-    def score_episode(self, episode: Mapping[str, Any], strategy: str) -> Dict[str, Any]:
+    def score_episode(
+        self, episode: Mapping[str, Any], strategy: str
+    ) -> Dict[str, Any]:
         feature_map = build_sampler_episode_feature_map(episode)
         vector = np.asarray(
             [
-                *[float(feature_map.get(name, 0.0)) for name in SAMPLER_EPISODE_FEATURE_NAMES],
-                *[1.0 if strategy == candidate else 0.0 for candidate in SAMPLER_POLICY_STRATEGIES],
+                *[
+                    float(feature_map.get(name, 0.0))
+                    for name in SAMPLER_EPISODE_FEATURE_NAMES
+                ],
+                *[
+                    1.0 if strategy == candidate else 0.0
+                    for candidate in SAMPLER_POLICY_STRATEGIES
+                ],
             ],
             dtype=np.float32,
         )
@@ -151,6 +187,7 @@ def resolve_sampler_policy_helper(
             raise ValueError("sampler policy helper requires a package path")
         return None
     if package is None:
+        assert package_path is not None
         package = load_sampler_policy_runtime_package(package_path)
     helper = LoadedSamplerPolicyHelper(package)
     if mode == "required" and not bool(helper.benchmark_gate.get("ready", False)):

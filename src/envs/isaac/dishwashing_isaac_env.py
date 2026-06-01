@@ -23,13 +23,7 @@ class DishwashingIsaacEnv:
     Single robot gripper + stack of dishes. Simple pick-and-place simulation.
     """
 
-    def __init__(
-        self,
-        num_envs=1,
-        device='cuda:0',
-        headless=True,
-        max_steps=60
-    ):
+    def __init__(self, num_envs=1, device="cuda:0", headless=True, max_steps=60):
         self.num_envs = num_envs
         self.device = device
         self.headless = headless
@@ -58,9 +52,10 @@ class DishwashingIsaacEnv:
         sim_params.physx.rest_offset = 0.0
 
         self.sim = self.gym.create_sim(
-            0, 0,  # compute_device, graphics_device
+            0,
+            0,  # compute_device, graphics_device
             gymapi.SIM_PHYSX,
-            sim_params
+            sim_params,
         )
 
         if self.sim is None:
@@ -97,7 +92,9 @@ class DishwashingIsaacEnv:
 
         for i in range(self.num_envs):
             # Create env
-            env = self.gym.create_env(self.sim, lower, upper, int(np.sqrt(self.num_envs)))
+            env = self.gym.create_env(
+                self.sim, lower, upper, int(np.sqrt(self.num_envs))
+            )
             self.envs.append(env)
 
             # Create simple "gripper" (box actor)
@@ -106,7 +103,9 @@ class DishwashingIsaacEnv:
 
             # Create box as gripper proxy
             box_size = gymapi.Vec3(0.1, 0.1, 0.05)
-            box_asset = self.gym.create_box(self.sim, box_size.x, box_size.y, box_size.z, asset_options)
+            box_asset = self.gym.create_box(
+                self.sim, box_size.x, box_size.y, box_size.z, asset_options
+            )
 
             gripper_handle = self.gym.create_actor(
                 env, box_asset, gripper_pose, f"gripper_{i}", i, 0
@@ -114,8 +113,7 @@ class DishwashingIsaacEnv:
 
             # Set gripper color (red)
             self.gym.set_rigid_body_color(
-                env, gripper_handle, 0, gymapi.MESH_VISUAL,
-                gymapi.Vec3(1.0, 0.0, 0.0)
+                env, gripper_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(1.0, 0.0, 0.0)
             )
 
             self.actor_handles.append(gripper_handle)
@@ -127,8 +125,9 @@ class DishwashingIsaacEnv:
 
                 # Cylinder as dish
                 dish_radius = 0.08
-                dish_height = 0.02
-                dish_asset = self.gym.create_sphere(self.sim, dish_radius, asset_options)
+                dish_asset = self.gym.create_sphere(
+                    self.sim, dish_radius, asset_options
+                )
 
                 dish_handle = self.gym.create_actor(
                     env, dish_asset, dish_pose, f"dish_{i}_{j}", i, 0
@@ -136,8 +135,7 @@ class DishwashingIsaacEnv:
 
                 # Set dish color (white)
                 self.gym.set_rigid_body_color(
-                    env, dish_handle, 0, gymapi.MESH_VISUAL,
-                    gymapi.Vec3(0.9, 0.9, 0.9)
+                    env, dish_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(0.9, 0.9, 0.9)
                 )
 
     def _init_tensors(self):
@@ -217,13 +215,13 @@ class DishwashingIsaacEnv:
         # Build info
         time_hours = self.step_count / 60.0  # 1 step = 1 minute
         info = {
-            't': time_hours,
-            'completed': self.completed,
-            'attempts': self.attempts,
-            'errors': self.errors,
-            'speed': speed,
-            'care': care,
-            'rate_per_min': self.completed / max(1, time_hours * 60)
+            "t": time_hours,
+            "completed": self.completed,
+            "attempts": self.attempts,
+            "errors": self.errors,
+            "speed": speed,
+            "care": care,
+            "rate_per_min": self.completed / max(1, time_hours * 60),
         }
 
         # Episode termination
@@ -238,14 +236,7 @@ class DishwashingIsaacEnv:
         """Set gripper target position (crude version for Phase 0)."""
         # In minimal version, directly set position
         # Full version would use force/torque control
-        for i, env in enumerate(self.envs):
-            gripper_handle = self.actor_handles[i]
-
-            # Get current pose
-            pose = self.gym.get_actor_rigid_body_states(
-                env, gripper_handle, gymapi.STATE_POS
-            )
-
+        for _env in self.envs:
             # Set target (crude - just for sanity check)
             # Real version would compute forces
             pass  # Placeholder - Isaac will use default dynamics
@@ -256,10 +247,10 @@ class DishwashingIsaacEnv:
         # Full version will return RGB images from cameras
 
         obs = {
-            't': self.step_count / 60.0,
-            'completed': self.completed,
-            'attempts': self.attempts,
-            'errors': self.errors
+            "t": self.step_count / 60.0,
+            "completed": self.completed,
+            "attempts": self.attempts,
+            "errors": self.errors,
         }
 
         return obs
@@ -272,9 +263,9 @@ class DishwashingIsaacEnv:
 
     def close(self):
         """Clean up Isaac Gym."""
-        if hasattr(self, 'sim'):
+        if hasattr(self, "sim"):
             self.gym.destroy_sim(self.sim)
-        if hasattr(self, 'viewer') and self.viewer is not None:
+        if hasattr(self, "viewer") and self.viewer is not None:
             self.gym.destroy_viewer(self.viewer)
         print("Isaac Gym closed")
 
@@ -295,9 +286,9 @@ def test_isaac_env():
         # Create environment
         env = DishwashingIsaacEnv(
             num_envs=1,
-            device='cpu',  # Use CPU for Phase 0 (more compatible)
+            device="cpu",  # Use CPU for Phase 0 (more compatible)
             headless=True,
-            max_steps=20
+            max_steps=20,
         )
 
         # Run episodes
@@ -308,7 +299,7 @@ def test_isaac_env():
             done = False
             episode_reward = 0.0
 
-            print(f"\n[Episode {ep+1}/{num_episodes}]")
+            print(f"\n[Episode {ep + 1}/{num_episodes}]")
 
             while not done:
                 # Random action for sanity check
@@ -317,11 +308,11 @@ def test_isaac_env():
                 obs, info, done = env.step(action)
 
                 # Compute simple reward (for logging)
-                reward = info['completed'] * 0.1 - info['errors'] * 0.5
+                reward = info["completed"] * 0.1 - info["errors"] * 0.5
                 episode_reward += reward
 
             # Log episode results
-            print(f"  Steps: {info['t']*60:.0f}")
+            print(f"  Steps: {info['t'] * 60:.0f}")
             print(f"  Completed: {info['completed']}")
             print(f"  Errors: {info['errors']}")
             print(f"  Reward: {episode_reward:.2f}")
@@ -336,8 +327,9 @@ def test_isaac_env():
     except Exception as e:
         print(f"\n❌ PHASE 0 FAILED: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_isaac_env()

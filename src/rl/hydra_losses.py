@@ -23,7 +23,7 @@ All functionality is:
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional
 import numpy as np
 
 
@@ -36,23 +36,23 @@ HYDRA_LOSS_SCAFFOLD_VERSION = "stage5_scaffolding_v1"
 
 # Head isolation modes
 HEAD_ISOLATION_MODES = {
-    'full_isolation': 'Each head trained independently',
-    'partial_sharing': 'Shared backbone, isolated heads',
-    'full_sharing': 'All heads share gradients'
+    "full_isolation": "Each head trained independently",
+    "partial_sharing": "Shared backbone, isolated heads",
+    "full_sharing": "All heads share gradients",
 }
 
 # Skill modes for head routing
 SKILL_MODES = {
-    'manipulation': ['grasp', 'place', 'precision'],
-    'navigation': ['locomotion', 'pathfinding', 'obstacle_avoidance'],
-    'coordination': ['bimanual', 'tool_use', 'sequencing'],
-    'economic': ['mpl_optimization', 'energy_efficiency', 'damage_minimization']
+    "manipulation": ["grasp", "place", "precision"],
+    "navigation": ["locomotion", "pathfinding", "obstacle_avoidance"],
+    "coordination": ["bimanual", "tool_use", "sequencing"],
+    "economic": ["mpl_optimization", "energy_efficiency", "damage_minimization"],
 }
 
 # Bounded contribution limits (Phase H compliance)
 CONTRIBUTION_BOUNDS = {
-    'min': -0.20,  # -20%
-    'max': 0.20    # +20%
+    "min": -0.20,  # -20%
+    "max": 0.20,  # +20%
 }
 
 # Gradient clipping thresholds
@@ -63,6 +63,7 @@ GRADIENT_CLIP_VALUE = 0.5
 # =============================================================================
 # Per-Head Actor Losses
 # =============================================================================
+
 
 class PerHeadActorLoss:
     """
@@ -79,9 +80,9 @@ class PerHeadActorLoss:
         self,
         head_name: str,
         skill_modes: List[str],
-        isolation_mode: str = 'partial_sharing',
+        isolation_mode: str = "partial_sharing",
         enable_clipping: bool = True,
-        enable_bounds: bool = True
+        enable_bounds: bool = True,
     ):
         """
         Initialize per-head actor loss.
@@ -107,7 +108,7 @@ class PerHeadActorLoss:
         self,
         predictions: Dict[str, Any],
         targets: Dict[str, Any],
-        skill_context: Optional[str] = None
+        skill_context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Compute actor loss for this head.
@@ -129,15 +130,15 @@ class PerHeadActorLoss:
 
         if not should_contribute:
             return {
-                'loss': 0.0,
-                'components': {},
-                'metadata': {
-                    'head_name': self.head_name,
-                    'skill_context': skill_context,
-                    'contributed': False,
-                    'reason': 'skill_context_mismatch'
+                "loss": 0.0,
+                "components": {},
+                "metadata": {
+                    "head_name": self.head_name,
+                    "skill_context": skill_context,
+                    "contributed": False,
+                    "reason": "skill_context_mismatch",
                 },
-                'gradients': {}
+                "gradients": {},
             }
 
         # PLACEHOLDER: Actual loss computation will be implemented by Codex
@@ -152,19 +153,19 @@ class PerHeadActorLoss:
         grad_stats = self._compute_gradient_stats(predictions)
 
         return {
-            'loss': float(loss_value),
-            'components': {
-                'policy_gradient': float(loss_value),
-                'entropy_bonus': 0.0,  # PLACEHOLDER
-                'regularization': 0.0   # PLACEHOLDER
+            "loss": float(loss_value),
+            "components": {
+                "policy_gradient": float(loss_value),
+                "entropy_bonus": 0.0,  # PLACEHOLDER
+                "regularization": 0.0,  # PLACEHOLDER
             },
-            'metadata': {
-                'head_name': self.head_name,
-                'skill_context': skill_context,
-                'contributed': True,
-                'isolation_mode': self.isolation_mode
+            "metadata": {
+                "head_name": self.head_name,
+                "skill_context": skill_context,
+                "contributed": True,
+                "isolation_mode": self.isolation_mode,
             },
-            'gradients': grad_stats
+            "gradients": grad_stats,
         }
 
     def _should_contribute(self, skill_context: Optional[str]) -> bool:
@@ -180,9 +181,7 @@ class PerHeadActorLoss:
         return False
 
     def _compute_policy_gradient_loss(
-        self,
-        predictions: Dict[str, Any],
-        targets: Dict[str, Any]
+        self, predictions: Dict[str, Any], targets: Dict[str, Any]
     ) -> float:
         """
         PLACEHOLDER: Compute policy gradient loss.
@@ -197,9 +196,7 @@ class PerHeadActorLoss:
     def _apply_bounds(self, loss_value: float) -> float:
         """Apply bounded contribution limits (±20%)."""
         return np.clip(
-            loss_value,
-            CONTRIBUTION_BOUNDS['min'],
-            CONTRIBUTION_BOUNDS['max']
+            loss_value, CONTRIBUTION_BOUNDS["min"], CONTRIBUTION_BOUNDS["max"]
         )
 
     def _compute_gradient_stats(self, predictions: Dict[str, Any]) -> Dict[str, float]:
@@ -210,17 +207,13 @@ class PerHeadActorLoss:
             Dictionary with gradient norm, max value, etc.
         """
         # PLACEHOLDER: Will be implemented with actual gradients by Codex
-        return {
-            'grad_norm': 0.0,
-            'grad_max': 0.0,
-            'grad_min': 0.0,
-            'grad_mean': 0.0
-        }
+        return {"grad_norm": 0.0, "grad_max": 0.0, "grad_min": 0.0, "grad_mean": 0.0}
 
 
 # =============================================================================
 # Per-Metric Critic Losses
 # =============================================================================
+
 
 class PerMetricCriticLoss:
     """
@@ -240,7 +233,7 @@ class PerMetricCriticLoss:
         metric_name: str,
         metric_type: str,
         enable_clipping: bool = True,
-        enable_bounds: bool = True
+        enable_bounds: bool = True,
     ):
         """
         Initialize per-metric critic loss.
@@ -257,7 +250,7 @@ class PerMetricCriticLoss:
         self.enable_bounds = enable_bounds
 
         # Validate metric type
-        valid_types = ['mpl', 'energy', 'damage', 'novelty']
+        valid_types = ["mpl", "energy", "damage", "novelty"]
         if metric_type not in valid_types:
             raise ValueError(f"Invalid metric type: {metric_type}")
 
@@ -265,7 +258,7 @@ class PerMetricCriticLoss:
         self,
         value_predictions: Dict[str, Any],
         value_targets: Dict[str, Any],
-        returns: Optional[np.ndarray] = None
+        returns: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]:
         """
         Compute critic loss for this metric.
@@ -290,29 +283,31 @@ class PerMetricCriticLoss:
             loss_value = self._apply_bounds(loss_value)
 
         return {
-            'loss': float(loss_value),
-            'components': {
-                'td_error': float(loss_value),
-                'regularization': 0.0  # PLACEHOLDER
+            "loss": float(loss_value),
+            "components": {
+                "td_error": float(loss_value),
+                "regularization": 0.0,  # PLACEHOLDER
             },
-            'metadata': {
-                'metric_name': self.metric_name,
-                'metric_type': self.metric_type,
-                'n_samples': len(value_targets) if isinstance(value_targets, (list, np.ndarray)) else 1
+            "metadata": {
+                "metric_name": self.metric_name,
+                "metric_type": self.metric_type,
+                "n_samples": len(value_targets)
+                if isinstance(value_targets, (list, np.ndarray))
+                else 1,
             },
-            'predictions': {
-                'mean': 0.0,  # PLACEHOLDER
-                'std': 0.0,   # PLACEHOLDER
-                'min': 0.0,   # PLACEHOLDER
-                'max': 0.0    # PLACEHOLDER
-            }
+            "predictions": {
+                "mean": 0.0,  # PLACEHOLDER
+                "std": 0.0,  # PLACEHOLDER
+                "min": 0.0,  # PLACEHOLDER
+                "max": 0.0,  # PLACEHOLDER
+            },
         }
 
     def _compute_td_loss(
         self,
         value_predictions: Dict[str, Any],
         value_targets: Dict[str, Any],
-        returns: Optional[np.ndarray]
+        returns: Optional[np.ndarray],
     ) -> float:
         """
         PLACEHOLDER: Compute temporal difference loss.
@@ -327,15 +322,14 @@ class PerMetricCriticLoss:
     def _apply_bounds(self, loss_value: float) -> float:
         """Apply bounded contribution limits (±20%)."""
         return np.clip(
-            loss_value,
-            CONTRIBUTION_BOUNDS['min'],
-            CONTRIBUTION_BOUNDS['max']
+            loss_value, CONTRIBUTION_BOUNDS["min"], CONTRIBUTION_BOUNDS["max"]
         )
 
 
 # =============================================================================
 # Head Isolation Manager
 # =============================================================================
+
 
 class HeadIsolationManager:
     """
@@ -348,7 +342,7 @@ class HeadIsolationManager:
     - Isolation mode compliance
     """
 
-    def __init__(self, isolation_mode: str = 'partial_sharing'):
+    def __init__(self, isolation_mode: str = "partial_sharing"):
         """
         Initialize head isolation manager.
 
@@ -361,9 +355,7 @@ class HeadIsolationManager:
             raise ValueError(f"Invalid isolation mode: {isolation_mode}")
 
     def apply_isolation(
-        self,
-        head_losses: Dict[str, float],
-        shared_backbone: Optional[Any] = None
+        self, head_losses: Dict[str, float], shared_backbone: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Apply gradient isolation rules to head losses.
@@ -375,9 +367,9 @@ class HeadIsolationManager:
         Returns:
             Dictionary with isolation metadata and gradient routing
         """
-        if self.isolation_mode == 'full_isolation':
+        if self.isolation_mode == "full_isolation":
             return self._apply_full_isolation(head_losses)
-        elif self.isolation_mode == 'partial_sharing':
+        elif self.isolation_mode == "partial_sharing":
             return self._apply_partial_sharing(head_losses, shared_backbone)
         else:  # full_sharing
             return self._apply_full_sharing(head_losses)
@@ -385,53 +377,53 @@ class HeadIsolationManager:
     def _apply_full_isolation(self, head_losses: Dict[str, float]) -> Dict[str, Any]:
         """Apply full isolation (no gradient sharing between heads)."""
         return {
-            'isolation_mode': 'full_isolation',
-            'head_losses': head_losses,
-            'shared_gradients': {},
-            'metadata': {
-                'n_heads': len(head_losses),
-                'gradient_sharing': False
-            }
+            "isolation_mode": "full_isolation",
+            "head_losses": head_losses,
+            "shared_gradients": {},
+            "metadata": {"n_heads": len(head_losses), "gradient_sharing": False},
         }
 
     def _apply_partial_sharing(
-        self,
-        head_losses: Dict[str, float],
-        shared_backbone: Optional[Any]
+        self, head_losses: Dict[str, float], shared_backbone: Optional[Any]
     ) -> Dict[str, Any]:
         """Apply partial sharing (shared backbone, isolated heads)."""
         return {
-            'isolation_mode': 'partial_sharing',
-            'head_losses': head_losses,
-            'shared_gradients': {
-                'backbone': sum(head_losses.values()) / len(head_losses) if head_losses else 0.0
+            "isolation_mode": "partial_sharing",
+            "head_losses": head_losses,
+            "shared_gradients": {
+                "backbone": sum(head_losses.values()) / len(head_losses)
+                if head_losses
+                else 0.0
             },
-            'metadata': {
-                'n_heads': len(head_losses),
-                'gradient_sharing': True,
-                'sharing_scope': 'backbone_only'
-            }
+            "metadata": {
+                "n_heads": len(head_losses),
+                "gradient_sharing": True,
+                "sharing_scope": "backbone_only",
+            },
         }
 
     def _apply_full_sharing(self, head_losses: Dict[str, float]) -> Dict[str, Any]:
         """Apply full sharing (all heads share gradients)."""
         return {
-            'isolation_mode': 'full_sharing',
-            'head_losses': head_losses,
-            'shared_gradients': {
-                'all': sum(head_losses.values()) / len(head_losses) if head_losses else 0.0
+            "isolation_mode": "full_sharing",
+            "head_losses": head_losses,
+            "shared_gradients": {
+                "all": sum(head_losses.values()) / len(head_losses)
+                if head_losses
+                else 0.0
             },
-            'metadata': {
-                'n_heads': len(head_losses),
-                'gradient_sharing': True,
-                'sharing_scope': 'full_network'
-            }
+            "metadata": {
+                "n_heads": len(head_losses),
+                "gradient_sharing": True,
+                "sharing_scope": "full_network",
+            },
         }
 
 
 # =============================================================================
 # Skill-Mode Router
 # =============================================================================
+
 
 class SkillModeRouter:
     """
@@ -450,11 +442,7 @@ class SkillModeRouter:
         """
         self.skill_modes = skill_modes or SKILL_MODES
 
-    def route(
-        self,
-        skill_context: str,
-        available_heads: List[str]
-    ) -> Dict[str, bool]:
+    def route(self, skill_context: str, available_heads: List[str]) -> Dict[str, bool]:
         """
         Route skill context to appropriate heads.
 
@@ -492,10 +480,11 @@ class SkillModeRouter:
 # Gradient Utilities
 # =============================================================================
 
+
 def clip_gradients(
     gradients: Dict[str, np.ndarray],
     clip_norm: float = GRADIENT_CLIP_NORM,
-    clip_value: float = GRADIENT_CLIP_VALUE
+    clip_value: float = GRADIENT_CLIP_VALUE,
 ) -> Dict[str, np.ndarray]:
     """
     Clip gradients by norm and value.
@@ -539,23 +528,23 @@ def compute_gradient_stats(gradients: Dict[str, np.ndarray]) -> Dict[str, float]
     grad_list = [g.flatten() for g in gradients.values() if g is not None]
     if not grad_list:
         return {
-            'grad_norm': 0.0,
-            'grad_max': 0.0,
-            'grad_min': 0.0,
-            'grad_mean': 0.0,
-            'grad_std': 0.0,
-            'n_parameters': 0
+            "grad_norm": 0.0,
+            "grad_max": 0.0,
+            "grad_min": 0.0,
+            "grad_mean": 0.0,
+            "grad_std": 0.0,
+            "n_parameters": 0,
         }
 
     all_grads = np.concatenate(grad_list)
 
     return {
-        'grad_norm': float(np.linalg.norm(all_grads)),
-        'grad_max': float(np.max(np.abs(all_grads))),
-        'grad_min': float(np.min(np.abs(all_grads))),
-        'grad_mean': float(np.mean(np.abs(all_grads))),
-        'grad_std': float(np.std(all_grads)),
-        'n_parameters': len(all_grads)
+        "grad_norm": float(np.linalg.norm(all_grads)),
+        "grad_max": float(np.max(np.abs(all_grads))),
+        "grad_min": float(np.min(np.abs(all_grads))),
+        "grad_mean": float(np.mean(np.abs(all_grads))),
+        "grad_std": float(np.std(all_grads)),
+        "n_parameters": len(all_grads),
     }
 
 
@@ -563,9 +552,9 @@ def compute_gradient_stats(gradients: Dict[str, np.ndarray]) -> Dict[str, float]
 # Bounded Contribution Enforcer
 # =============================================================================
 
+
 def enforce_bounded_contributions(
-    contributions: Dict[str, float],
-    bounds: Optional[Dict[str, float]] = None
+    contributions: Dict[str, float], bounds: Optional[Dict[str, float]] = None
 ) -> Dict[str, float]:
     """
     Enforce bounded contribution limits (±20%).
@@ -582,7 +571,7 @@ def enforce_bounded_contributions(
 
     bounded = {}
     for name, value in contributions.items():
-        bounded[name] = np.clip(value, bounds['min'], bounds['max'])
+        bounded[name] = np.clip(value, bounds["min"], bounds["max"])
 
     return bounded
 
@@ -590,6 +579,7 @@ def enforce_bounded_contributions(
 # =============================================================================
 # JSON-Safe Serialization
 # =============================================================================
+
 
 def make_json_safe(obj: Any) -> Any:
     """
@@ -602,7 +592,8 @@ def make_json_safe(obj: Any) -> Any:
         JSON-safe version
     """
     if isinstance(obj, (np.ndarray, np.generic)):
-        return float(obj) if obj.size == 1 else obj.tolist()
+        arr = np.asarray(obj)
+        return float(arr.item()) if arr.size == 1 else arr.tolist()
     elif isinstance(obj, dict):
         return {k: make_json_safe(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
@@ -615,9 +606,11 @@ def make_json_safe(obj: Any) -> Any:
 # Hydra Loss Orchestration Helpers
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class HydraLossResult:
     """Canonical, JSON-safe loss summary used by smoke tests and trainers."""
+
     actor: Dict[str, Any]
     critic: Dict[str, Any]
     isolation: Dict[str, Any]
@@ -642,8 +635,8 @@ def compute_hydra_losses(
     value_targets: Optional[Dict[str, Dict[str, Any]]] = None,
     returns: Optional[np.ndarray] = None,
     skill_context: Optional[str] = None,
-    isolation_mode: str = 'partial_sharing',
-    custom_skill_router: Optional[SkillModeRouter] = None
+    isolation_mode: str = "partial_sharing",
+    custom_skill_router: Optional[SkillModeRouter] = None,
 ) -> HydraLossResult:
     """
     Orchestrate per-head actor and per-metric critic loss computation.
@@ -669,14 +662,18 @@ def compute_hydra_losses(
             head_scalar_losses[head_name] = float(result.get("loss", 0.0))
 
     isolation_manager = HeadIsolationManager(isolation_mode=isolation_mode)
-    isolation_info = isolation_manager.apply_isolation(head_scalar_losses, shared_backbone=None)
+    isolation_info = isolation_manager.apply_isolation(
+        head_scalar_losses, shared_backbone=None
+    )
 
     critic_results: Dict[str, Any] = {}
     for metric_name in sorted(critic_losses.keys()):
-        loss_impl = critic_losses[metric_name]
+        critic_loss_impl = critic_losses[metric_name]
         preds = (value_predictions or {}).get(metric_name, {})
         targs = (value_targets or {}).get(metric_name, {})
-        critic_results[metric_name] = loss_impl.compute_loss(preds, targs, returns=returns)
+        critic_results[metric_name] = critic_loss_impl.compute_loss(
+            preds, targs, returns=returns
+        )
 
     metadata = {
         "skill_context": skill_context,

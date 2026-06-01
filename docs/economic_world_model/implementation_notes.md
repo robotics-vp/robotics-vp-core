@@ -1,5 +1,115 @@
 # Economic World Model Implementation Notes
 
+## 2026-06-01 - RL package static cleanup
+
+### What changed
+
+- Cleared RL-local mypy findings.
+  - Sampler policy training/runtime now use explicit optional-torch aliases.
+  - Hydra JSON conversion now handles NumPy scalar/array values through `np.asarray` before scalar extraction.
+  - Hydra actor/critic fallback head selection no longer constructs optional string lists.
+  - Episode sampling now narrows queue-dispatch decisions, unified-quality payloads, and enrichment dictionaries before updates.
+- Cleared package-level ruff for `src/rl`.
+
+### Boundary
+
+- This is RL static hygiene only.
+- Reward equations, Hydra loss semantics, queue dispatch authority, sampler authority, PPO behavior, controller math, and Phase B math were not changed.
+- No training, promotion, GPU/provider/hardware execution, or weight write occurred.
+
+### Verification
+
+- `python3 -m ruff check src/rl` -> `All checks passed!`
+- `python3 -m compileall src/rl -q`
+- `python3 -m mypy --follow-imports=silent src/rl --show-error-codes --no-error-summary` -> `0` RL-local errors; remaining output comes from imported dependency buckets
+- `python3 -m pytest -q tests/test_weights.py tests/test_sampler_policy.py tests/test_train_sampler_policy.py tests/test_sampling_determinism_seeded.py tests/test_queue_dispatch_integration.py tests/test_online_queue_dispatch_integration.py tests/test_shadow_offline_rl.py tests/test_shadow_replay_policy.py` -> `13 passed`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` -> `117` actual `error:` records in `63` files
+  - `python3 -m ruff check . --output-format=json` -> `189` issues
+
+## 2026-06-01 - Environment package static cleanup
+
+### What changed
+
+- Cleared env-local mypy findings.
+  - Workcell sensor optional NumPy fallback is explicitly typed.
+  - Dishwashing and LSD env locals now have concrete annotations where mypy could not infer mutable container types.
+  - Video wrapper demo defaults now use the repo econ-parameter loader instead of constructing an incomplete `EconParams`.
+  - PyBullet imports carry honest missing-stub ignores; no dependency availability is implied.
+  - LSD vector-scene reset now fails closed if scene graph construction unexpectedly did not produce a graph.
+- Cleared package-level ruff for `src/envs`.
+
+### Boundary
+
+- This is local environment/curriculum hygiene only.
+- Fixed-base dishwashing/workcell/LSD surfaces remain curriculum or regression producers, not G1/bipedal proof.
+- No simulator provider, ROS2/Unitree bridge, hardware, GPU training, weight write, or promotion path ran.
+
+### Verification
+
+- `python3 -m ruff check src/envs` -> `All checks passed!`
+- `python3 -m compileall src/envs -q`
+- `python3 -m mypy --follow-imports=silent src/envs --show-error-codes --no-error-summary` -> `0` env-local errors; remaining output comes from imported dependency buckets
+- `python3 -m pytest -q tests/envs tests/test_lsd3d_geometry.py tests/test_lsd_vector_scene_env.py tests/test_lsd_integration.py tests/test_workcell_paramount.py tests/test_env_regality_compliance.py tests/test_g1_primary_environment.py` -> `121 passed, 1 skipped`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` -> `132` actual `error:` records in `68` files
+  - `python3 -m ruff check . --output-format=json` -> `197` issues
+
+## 2026-06-01 - VLA package static cleanup
+
+### What changed
+
+- Cleared VLA-local mypy findings.
+  - `transformer_planner.py` and `vla_trainer.py` now use explicit optional-torch aliases and concrete fallback bases instead of redefining `nn` or subclassing dynamic expressions directly.
+  - `energy_driver_head.py` uses Python 3.9-compatible `Optional[...]` annotations.
+  - `meta_dino_backbone.py` explicitly types the optional model/processor slots as provider objects.
+  - RECAP and rollout helpers now narrow optional values before use.
+  - `TeacherActionEnvelope.to_vla_payload()` now returns a deliberately mixed `Dict[str, Any]` payload rather than forcing strings/lists through a float-only dict type.
+- Cleared package-level ruff for `src/vla`.
+
+### Boundary
+
+- This is VLA/teacher-runtime static hygiene only.
+- No OpenVLA provider ran, no model was trained, no weights were written, no teacher/runtime output was promoted, and no live policy authority changed.
+- VLA outputs remain advisory/provider-facing surfaces until real provider receipts exist.
+
+### Verification
+
+- `python3 -m ruff check src/vla` -> `All checks passed!`
+- `python3 -m compileall src/vla -q`
+- `python3 -m mypy --follow-imports=silent src/vla --show-error-codes --no-error-summary` -> `0` VLA-local errors; remaining output comes from imported dependency buckets
+- `python3 -m pytest -q tests/test_vla_backend_policy.py tests/test_teacher_runtime.py tests/test_rollout_labeler.py tests/test_train_vla_recap_offline.py tests/test_vla_semantic_evidence.py` -> `17 passed`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` -> `150` actual `error:` records in `77` files
+  - `python3 -m ruff check . --output-format=json` -> `223` issues
+
+## 2026-06-01 - Vision package static cleanup
+
+### What changed
+
+- Cleared all `src/vision` mypy findings.
+  - Optional PyTorch fallback modules now use explicit `Any`-typed aliases and concrete fallback bases instead of redefining `nn`.
+  - NAG/SceneIR and reconstruction helpers now narrow metadata mappings, optional tensors, and JSON-like payloads before attribute or `.get()` access.
+  - Motion hierarchy, map-first supervision, tracker, and NAG editor/fitter code now avoid variable reuse patterns that forced mypy into wrong list/tensor/array types.
+- Cleared package-level ruff for `src/vision`.
+  - Removed unused imports/locals across BiFPN, dataset builder, NAG, SceneIR provenance/serialization/performance, and related support surfaces.
+
+### Boundary
+
+- This is local Perception/Grounding hygiene only.
+- No SAM/DINO/V-JEPA/OpenVLA/Isaac provider ran, no model was trained, no weights were written, no frozen Phase B math changed, and no promotion evidence was claimed.
+- G1/bipedal whole-body remains primary. The cleaned vision code is still producer/advisory support; real provider truth remains blocked on configured provider/RunPod execution.
+
+### Verification
+
+- `python3 -m mypy --follow-imports=silent src/vision` -> `Success: no issues found in 62 source files`
+- `python3 -m ruff check src/vision` -> `All checks passed!`
+- `python3 -m compileall src/vision -q`
+- `python3 -m pytest tests/vision tests/test_nag_core.py tests/test_nag_lsd_integration.py tests/test_vision_backbone_projection_proof_of_life_smoke.py -q` -> `152 passed`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy --follow-imports=silent src/ --show-error-codes --no-error-summary` -> `172` actual `error:` records in `85` files
+  - `python3 -m ruff check . --output-format=json` -> `232` issues
+
 ## 2026-06-01 - WM subsystem debt sweep and local receipt joins
 
 ### What changed

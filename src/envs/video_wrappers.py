@@ -10,7 +10,8 @@ Later: Replace with real sim renders or camera feeds.
 
 import numpy as np
 from collections import deque
-from typing import Tuple, Dict, Any
+from typing import Any, Deque, Dict, Tuple, cast
+
 
 class DishwashingVideoEnv:
     """
@@ -29,7 +30,7 @@ class DishwashingVideoEnv:
         frames: int = 8,
         height: int = 64,
         width: int = 64,
-        render_mode: str = 'synthetic',
+        render_mode: str = "synthetic",
     ):
         """
         Args:
@@ -46,7 +47,7 @@ class DishwashingVideoEnv:
         self.render_mode = render_mode
 
         # Frame buffer (stores last T frames)
-        self.frame_buffer = deque(maxlen=frames)
+        self.frame_buffer: Deque[np.ndarray] = deque(maxlen=frames)
 
         # Observation space (T, C, H, W) in CHW format for PyTorch
         # But we'll return as (T, H, W, C) and let encoder handle transpose
@@ -107,9 +108,9 @@ class DishwashingVideoEnv:
         Returns:
             frame: RGB frame (H, W, 3) in [0, 255] uint8
         """
-        if self.render_mode == 'synthetic':
+        if self.render_mode == "synthetic":
             return self._render_synthetic_frame(state)
-        elif self.render_mode == 'sim':
+        elif self.render_mode == "sim":
             # Future: return sim.render() or camera.capture()
             raise NotImplementedError("Sim rendering not yet implemented")
         else:
@@ -128,7 +129,9 @@ class DishwashingVideoEnv:
             frame: (H, W, 3) RGB uint8
         """
         # Create blank canvas
-        frame = np.ones((self.height, self.width, 3), dtype=np.uint8) * 240  # Light gray background
+        frame = (
+            np.ones((self.height, self.width, 3), dtype=np.uint8) * 240
+        )  # Light gray background
 
         # Extract key metrics from state
         # Assuming state has: [completed, attempts, errors, time_elapsed, speed, care, ...]
@@ -152,19 +155,49 @@ class DishwashingVideoEnv:
         bar_spacing = self.width // 5
 
         # Bar 1: Completed (green)
-        self._draw_bar(frame, x=bar_spacing * 0, height_norm=completed_norm, color=(0, 200, 0), width=bar_width)
+        self._draw_bar(
+            frame,
+            x=bar_spacing * 0,
+            height_norm=completed_norm,
+            color=(0, 200, 0),
+            width=bar_width,
+        )
 
         # Bar 2: Attempts (blue)
-        self._draw_bar(frame, x=bar_spacing * 1, height_norm=attempts_norm, color=(0, 100, 200), width=bar_width)
+        self._draw_bar(
+            frame,
+            x=bar_spacing * 1,
+            height_norm=attempts_norm,
+            color=(0, 100, 200),
+            width=bar_width,
+        )
 
         # Bar 3: Errors (red)
-        self._draw_bar(frame, x=bar_spacing * 2, height_norm=errors_norm, color=(200, 0, 0), width=bar_width)
+        self._draw_bar(
+            frame,
+            x=bar_spacing * 2,
+            height_norm=errors_norm,
+            color=(200, 0, 0),
+            width=bar_width,
+        )
 
         # Bar 4: Speed (yellow)
-        self._draw_bar(frame, x=bar_spacing * 3, height_norm=speed, color=(200, 200, 0), width=bar_width)
+        self._draw_bar(
+            frame,
+            x=bar_spacing * 3,
+            height_norm=speed,
+            color=(200, 200, 0),
+            width=bar_width,
+        )
 
         # Bar 5: Care (cyan)
-        self._draw_bar(frame, x=bar_spacing * 4, height_norm=care, color=(0, 200, 200), width=bar_width)
+        self._draw_bar(
+            frame,
+            x=bar_spacing * 4,
+            height_norm=care,
+            color=(0, 200, 200),
+            width=bar_width,
+        )
 
         # Add thin border (numpy-based)
         frame[0, :] = [100, 100, 100]  # Top
@@ -174,7 +207,14 @@ class DishwashingVideoEnv:
 
         return frame
 
-    def _draw_bar(self, frame: np.ndarray, x: int, height_norm: float, color: Tuple[int, int, int], width: int):
+    def _draw_bar(
+        self,
+        frame: np.ndarray,
+        x: int,
+        height_norm: float,
+        color: Tuple[int, int, int],
+        width: int,
+    ):
         """Draw a vertical bar on the frame"""
         bar_height = int(height_norm * (self.height - 10))
         y_start = self.height - 5 - bar_height
@@ -216,7 +256,7 @@ class DishwashingVideoEnv:
 
     def close(self):
         """Close environment"""
-        if hasattr(self.base_env, 'close'):
+        if hasattr(self.base_env, "close"):
             self.base_env.close()
 
 
@@ -244,26 +284,28 @@ def create_video_env(base_env_class, base_env_config: dict, video_config: dict):
     # Wrap in video env
     video_env = DishwashingVideoEnv(
         base_env=base_env,
-        frames=video_config.get('frames', 8),
-        height=video_config.get('height', 64),
-        width=video_config.get('width', 64),
-        render_mode=video_config.get('render_mode', 'synthetic'),
+        frames=video_config.get("frames", 8),
+        height=video_config.get("height", 64),
+        width=video_config.get("width", 64),
+        render_mode=video_config.get("render_mode", "synthetic"),
     )
 
     return video_env
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """Test video wrapper"""
     import sys
-    sys.path.insert(0, '/Users/amarmurray/robotics v-p economics model')
 
-    from src.envs.dishwashing_env import DishwashingEnv, DishwashingParams
+    sys.path.insert(0, "/Users/amarmurray/robotics v-p economics model")
+
+    from src.config.econ_params import EconParams, load_econ_params
+    from src.envs.dishwashing_env import DishwashingEnv
 
     print("Testing DishwashingVideoEnv...")
 
     # Create base env with defaults
-    params = DishwashingParams()
+    params = cast(EconParams, load_econ_params({}, preset="toy"))
     base_env = DishwashingEnv(params)
 
     # Wrap in video env
@@ -272,7 +314,7 @@ if __name__ == '__main__':
         frames=8,
         height=64,
         width=64,
-        render_mode='synthetic',
+        render_mode="synthetic",
     )
 
     # Test reset
@@ -283,7 +325,9 @@ if __name__ == '__main__':
     print(f"Observation range: [{obs.min():.3f}, {obs.max():.3f}]")
     assert obs.shape == (8, 3, 64, 64), f"Expected (8, 3, 64, 64), got {obs.shape}"
     assert obs.dtype == np.float32, f"Expected float32, got {obs.dtype}"
-    assert 0 <= obs.min() <= obs.max() <= 1, f"Expected [0, 1], got [{obs.min()}, {obs.max()}]"
+    assert 0 <= obs.min() <= obs.max() <= 1, (
+        f"Expected [0, 1], got [{obs.min()}, {obs.max()}]"
+    )
 
     # Test step
     print("\n[Step Test]")
@@ -300,7 +344,7 @@ if __name__ == '__main__':
         action = np.random.uniform(0, 1, size=2)
         obs, info, done = video_env.step(action)
         if done:
-            print(f"Episode ended at step {i+1}")
+            print(f"Episode ended at step {i + 1}")
             break
 
     print(f"Final observation shape: {obs.shape}")
@@ -309,7 +353,7 @@ if __name__ == '__main__':
     print("\n[Frame Buffer Test]")
     obs1 = video_env.reset()
     action = np.array([0.8, 0.2])  # High speed, low care
-    obs2, _, _ = video_env.step(action)
+    obs2, _info2, _done2 = video_env.step(action)
 
     # First and last frames should differ after a step (or be very similar if state barely changed)
     frame_diff = np.abs(obs2[-1] - obs2[0]).mean()

@@ -25,6 +25,7 @@ import numpy as np
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -70,6 +71,7 @@ class NAGFromLSDConfig:
         motion_plausibility_max_residual_mean: Residual mean threshold for plausibility
         motion_plausibility_min_score: Minimum plausibility score threshold
     """
+
     atlas_size: Tuple[int, int] = (256, 256)
     max_iters: int = 200
     lr: float = 1e-3
@@ -86,7 +88,7 @@ class NAGFromLSDConfig:
     enable_motion_plausibility_filter: bool = False
     motion_plausibility_max_residual_mean: float = 1.5
     motion_plausibility_min_score: float = 0.1
-    
+
     # Scene IR Tracker integration
     enable_scene_ir_filter: bool = False
     scene_ir_max_mean_loss: float = 0.5
@@ -111,6 +113,7 @@ class NAGEditPolicyConfig:
         saturation_range: Range for saturation scale
         max_edits_per_counterfactual: Maximum edits per counterfactual
     """
+
     num_counterfactuals: int = 3
     prob_remove: float = 0.15
     prob_duplicate: float = 0.2
@@ -137,6 +140,7 @@ class NAGDatapack:
         difficulty_features: Dict of difficulty metrics
         lsd_metadata: Additional metadata from LSD backend
     """
+
     base_episode_id: str
     counterfactual_id: str
     frames: np.ndarray  # (T, 3, H, W) float32 in [0, 1]
@@ -148,7 +152,7 @@ class NAGDatapack:
     motion_hierarchy_summary: Optional[Dict[str, Any]] = None
     motion_plausibility_flags: Optional[Dict[str, Any]] = None
     motion_quality_score: Optional[float] = None
-    
+
     # Scene IR Tracker metadata
     scene_ir_summary: Optional[Dict[str, Any]] = None
     scene_ir_quality_score: Optional[float] = None
@@ -157,7 +161,9 @@ class NAGDatapack:
     def __post_init__(self) -> None:
         # Validate frame shape
         if self.frames.ndim != 4:
-            raise ValueError(f"frames must be 4D (T, 3, H, W), got shape {self.frames.shape}")
+            raise ValueError(
+                f"frames must be 4D (T, 3, H, W), got shape {self.frames.shape}"
+            )
         if self.frames.shape[1] != 3:
             raise ValueError(f"frames must have 3 channels, got {self.frames.shape[1]}")
 
@@ -219,11 +225,12 @@ def render_lsd_episode_frames(
     _check_torch()
 
     device = device or torch.device("cpu")
-    H, W = camera_params.height, camera_params.width
 
     # Try concrete renderer first
     if renderer is not None and gaussian_scene is not None and not use_stub:
-        logger.debug(f"render_lsd_episode_frames: using concrete renderer for {num_frames} frames")
+        logger.debug(
+            f"render_lsd_episode_frames: using concrete renderer for {num_frames} frames"
+        )
         return _render_with_concrete_renderer(
             gaussian_scene, camera_params, num_frames, device, renderer
         )
@@ -242,7 +249,9 @@ def render_lsd_episode_frames(
             "or explicitly set use_stub=True for testing."
         )
 
-    logger.debug(f"render_lsd_episode_frames: stub mode, generating {num_frames} synthetic frames")
+    logger.debug(
+        f"render_lsd_episode_frames: stub mode, generating {num_frames} synthetic frames"
+    )
     return _render_stub_frames(gaussian_scene, camera_params, num_frames, device)
 
 
@@ -335,7 +344,9 @@ def _render_stub_frames(
         return torch.stack(frames, dim=0)
 
     # Fallback: gradient noise frames (more visually distinct than pure noise)
-    fallback_frames = torch.rand(num_frames, 3, H, W, device=device, dtype=torch.float32) * 0.5 + 0.25
+    fallback_frames = (
+        torch.rand(num_frames, 3, H, W, device=device, dtype=torch.float32) * 0.5 + 0.25
+    )
     return fallback_frames
 
 
@@ -379,7 +390,11 @@ def extract_object_masks_from_scene_graph(
     excluded_classes: Dict[str, int] = {}
 
     for obj in scene_graph.objects:
-        class_name = str(obj.class_id.name) if hasattr(obj.class_id, "name") else str(obj.class_id)
+        class_name = (
+            str(obj.class_id.name)
+            if hasattr(obj.class_id, "name")
+            else str(obj.class_id)
+        )
         if class_name in config.interesting_classes:
             interesting_objects.append(obj)
         else:
@@ -402,7 +417,11 @@ def extract_object_masks_from_scene_graph(
         node_id = make_node_id(f"obj_{obj.id}")
 
         # Simple projection to image coordinates
-        bbox = scene_graph.bounding_box() if hasattr(scene_graph, "bounding_box") else (0, 0, 20, 20)
+        bbox = (
+            scene_graph.bounding_box()
+            if hasattr(scene_graph, "bounding_box")
+            else (0, 0, 20, 20)
+        )
         scale_x = W / (bbox[2] - bbox[0] + 1)
         scale_y = H / (bbox[3] - bbox[1] + 1)
 
@@ -480,7 +499,7 @@ def build_nag_scene_from_lsd_rollout(
     _check_torch()
 
     from src.vision.nag.fitter import fit_nag_to_sequence, FitterConfig
-    from src.vision.nag.scene import NAGScene, NAGSceneConfig, create_scene_with_background
+    from src.vision.nag.scene import NAGSceneConfig, create_scene_with_background
 
     device = device or torch.device("cpu")
 
@@ -493,7 +512,9 @@ def build_nag_scene_from_lsd_rollout(
     # Check for camera rig in episode data (for time-varying camera)
     camera_rig = backend_episode.get("camera_rig")
     if camera_rig is not None and hasattr(camera_rig, "positions"):
-        logger.debug(f"build_nag_scene: using camera_rig with {len(camera_rig.positions)} views")
+        logger.debug(
+            f"build_nag_scene: using camera_rig with {len(camera_rig.positions)} views"
+        )
         # Could upgrade camera here if needed
 
     logger.debug(f"build_nag_scene: episode={episode_id}, num_frames={num_frames}")
@@ -510,14 +531,22 @@ def build_nag_scene_from_lsd_rollout(
     elif renderer is not None and gaussian_scene is not None:
         logger.debug("build_nag_scene: using concrete renderer")
         frames = render_lsd_episode_frames(
-            gaussian_scene, camera, num_frames=num_frames, device=device,
-            renderer=renderer, use_stub=False
+            gaussian_scene,
+            camera,
+            num_frames=num_frames,
+            device=device,
+            renderer=renderer,
+            use_stub=False,
         )
     elif config.use_stub_renderer:
         logger.debug("build_nag_scene: using stub renderer (test mode)")
         frames = render_lsd_episode_frames(
-            gaussian_scene, camera, num_frames=num_frames, device=device,
-            renderer=None, use_stub=True
+            gaussian_scene,
+            camera,
+            num_frames=num_frames,
+            device=device,
+            renderer=None,
+            use_stub=True,
         )
     else:
         raise ValueError(
@@ -536,7 +565,9 @@ def build_nag_scene_from_lsd_rollout(
 
     if not masks:
         # No objects detected - return background-only scene
-        logger.info(f"build_nag_scene: no foreground objects, creating background-only scene")
+        logger.info(
+            "build_nag_scene: no foreground objects, creating background-only scene"
+        )
         bg_image = frames[num_frames // 2]
         scene = create_scene_with_background(
             bg_image, camera, NAGSceneConfig(atlas_size=config.atlas_size)
@@ -668,9 +699,15 @@ def generate_nag_counterfactuals_for_lsd_episode(
         if summary_obj is None:
             tree_stats = mh_raw.get("tree_stats") or mh_raw.get("stats") or {}
             resid_stats = mh_raw.get("delta_resid_stats") or {}
-            mean_tree_depth = float(tree_stats.get("mean_tree_depth", mh_raw.get("mean_tree_depth", 0.0)) or 0.0)
+            mean_tree_depth = float(
+                tree_stats.get("mean_tree_depth", mh_raw.get("mean_tree_depth", 0.0))
+                or 0.0
+            )
             mean_branch_factor = float(
-                tree_stats.get("mean_branch_factor", mh_raw.get("mean_branch_factor", 0.0)) or 0.0
+                tree_stats.get(
+                    "mean_branch_factor", mh_raw.get("mean_branch_factor", 0.0)
+                )
+                or 0.0
             )
             resid_mean = mh_raw.get("residual_mean", resid_stats.get("residual_mean"))
             if resid_mean is None:
@@ -710,24 +747,25 @@ def generate_nag_counterfactuals_for_lsd_episode(
     if sir_raw is not None:
         scene_ir_summary = sir_raw if isinstance(sir_raw, dict) else {}
         scene_ir_quality_score = backend_episode.get(
-            "scene_ir_quality_score",
-            scene_ir_summary.get("quality_score")
+            "scene_ir_quality_score", scene_ir_summary.get("quality_score")
         )
-        
+
         # Compute plausibility flags based on config thresholds
         if nag_config.enable_scene_ir_filter and scene_ir_summary:
             mean_loss = scene_ir_summary.get("ir_loss_mean", 0.0)
-            quality = scene_ir_quality_score if scene_ir_quality_score is not None else 0.5
+            quality = (
+                scene_ir_quality_score if scene_ir_quality_score is not None else 0.5
+            )
             id_switch_rate = scene_ir_summary.get("id_switch_rate", 0.0)
             occlusion_rate = scene_ir_summary.get("occlusion_rate", 0.0)
-            
+
             is_plausible = (
-                mean_loss <= nag_config.scene_ir_max_mean_loss and
-                quality >= nag_config.scene_ir_min_quality_score and
-                id_switch_rate <= nag_config.scene_ir_max_id_switch_rate and
-                occlusion_rate <= nag_config.scene_ir_max_occlusion_rate
+                mean_loss <= nag_config.scene_ir_max_mean_loss
+                and quality >= nag_config.scene_ir_min_quality_score
+                and id_switch_rate <= nag_config.scene_ir_max_id_switch_rate
+                and occlusion_rate <= nag_config.scene_ir_max_occlusion_rate
             )
-            
+
             scene_ir_flags = {
                 "is_plausible": is_plausible,
                 "reason": "pass" if is_plausible else "threshold_exceeded",
@@ -747,7 +785,10 @@ def generate_nag_counterfactuals_for_lsd_episode(
 
             # Apply random edits
             edits: List[NAGEditVector] = apply_random_edits(
-                edited_scene, policy, rng, max_edits=edit_config.max_edits_per_counterfactual
+                edited_scene,
+                policy,
+                rng,
+                max_edits=edit_config.max_edits_per_counterfactual,
             )
 
             # Render edited clip
@@ -755,9 +796,12 @@ def generate_nag_counterfactuals_for_lsd_episode(
             edited_frames_np = edited_frames.detach().cpu().numpy().astype(np.float32)
 
             # Validate output shape
-            assert edited_frames_np.shape == (num_frames, 3, camera.height, camera.width), (
-                f"Unexpected frame shape: {edited_frames_np.shape}"
-            )
+            assert edited_frames_np.shape == (
+                num_frames,
+                3,
+                camera.height,
+                camera.width,
+            ), f"Unexpected frame shape: {edited_frames_np.shape}"
 
             # Create datapack
             counterfactual_id = f"{base_episode_id}_cf{cf_idx}"
@@ -785,7 +829,9 @@ def generate_nag_counterfactuals_for_lsd_episode(
                 lsd_metadata={
                     "scene_id": backend_episode.get("scene_id", "unknown"),
                     "scene_graph_config": backend_episode.get("scene_graph_config", {}),
-                    "base_mpl": backend_episode.get("mpl_metrics", {}).get("mpl_units_per_hour", 0),
+                    "base_mpl": backend_episode.get("mpl_metrics", {}).get(
+                        "mpl_units_per_hour", 0
+                    ),
                 },
                 motion_hierarchy_summary=motion_hierarchy_summary,
                 motion_plausibility_flags=motion_plausibility_flags,
@@ -798,7 +844,9 @@ def generate_nag_counterfactuals_for_lsd_episode(
             datapacks.append(datapack)
 
         except Exception as e:
-            logger.warning(f"generate_nag_counterfactuals: counterfactual {cf_idx} failed: {e}")
+            logger.warning(
+                f"generate_nag_counterfactuals: counterfactual {cf_idx} failed: {e}"
+            )
             continue
 
     logger.debug(f"generate_nag_counterfactuals: generated {len(datapacks)} datapacks")

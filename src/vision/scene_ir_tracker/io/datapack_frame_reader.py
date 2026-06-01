@@ -1,6 +1,7 @@
 """
 Datapack frame reader and contract validation for SceneTracks.
 """
+
 from __future__ import annotations
 
 import json
@@ -89,14 +90,18 @@ def read_datapack_frames(
         depth_frames = sensor_bundle.depth_frames
         seg_frames = sensor_bundle.seg_frames
     else:
-        frames, depth_frames, seg_frames = _load_frames_from_path(path, camera_name=camera_name)
+        frames, depth_frames, seg_frames = _load_frames_from_path(
+            path, camera_name=camera_name
+        )
     if not frames:
         if mode == "vector_proxy":
-            frames, depth_frames, seg_frames, proxy_camera_params = _render_vector_proxy_frames(
-                path,
-                camera_name=camera_name,
-                max_frames=max_frames,
-                seed=seed,
+            frames, depth_frames, seg_frames, proxy_camera_params = (
+                _render_vector_proxy_frames(
+                    path,
+                    camera_name=camera_name,
+                    max_frames=max_frames,
+                    seed=seed,
+                )
             )
             timestamps = _build_timestamps(len(frames))
             instance_masks = _build_instance_masks(seg_frames, len(frames))
@@ -132,7 +137,11 @@ def read_datapack_frames(
             "or run with --mode vector_proxy to synthesize frames."
         )
 
-    timestamps = sensor_bundle.timestamps_s if sensor_bundle and sensor_bundle.timestamps_s else _load_timestamps(path, len(frames))
+    timestamps = (
+        sensor_bundle.timestamps_s
+        if sensor_bundle and sensor_bundle.timestamps_s
+        else _load_timestamps(path, len(frames))
+    )
     indices = list(range(len(frames)))
     frames, depth_frames, seg_frames, timestamps, indices = _downsample(
         frames,
@@ -214,7 +223,11 @@ def _load_sensor_bundle(
     if rgb_path is None:
         return None
 
-    frames = _read_npz_frames(rgb_path) if rgb_path.suffix.lower() == ".npz" else _read_npy_frames(rgb_path)
+    frames = (
+        _read_npz_frames(rgb_path)
+        if rgb_path.suffix.lower() == ".npz"
+        else _read_npy_frames(rgb_path)
+    )
     if not frames:
         return None
 
@@ -260,7 +273,9 @@ def _read_npy_frames(path: Path) -> List[np.ndarray]:
     try:
         arr = np.load(path)
     except Exception as exc:
-        raise DatapackFrameError(f"Failed to load npy frames from {path}: {exc}") from exc
+        raise DatapackFrameError(
+            f"Failed to load npy frames from {path}: {exc}"
+        ) from exc
     if arr.ndim == 3 and arr.shape[-1] in (1, 3, 4):
         arr = arr[np.newaxis, ...]
     return [np.asarray(frame) for frame in arr]
@@ -395,7 +410,9 @@ def _load_frames_from_dir(
     return rgb_frames or [], depth_frames, seg_frames
 
 
-def _load_frames_from_candidates(candidates: Iterable[Path]) -> Optional[List[np.ndarray]]:
+def _load_frames_from_candidates(
+    candidates: Iterable[Path],
+) -> Optional[List[np.ndarray]]:
     for cand in candidates:
         if not cand.exists():
             continue
@@ -424,11 +441,15 @@ def _read_video_frames(path: Path) -> List[np.ndarray]:
     try:
         import imageio.v3 as iio  # type: ignore[import-not-found]
     except Exception as exc:
-        raise DatapackFrameError(f"imageio is required to read video frames: {exc}") from exc
+        raise DatapackFrameError(
+            f"imageio is required to read video frames: {exc}"
+        ) from exc
     try:
         frames = iio.imread(path)
     except Exception as exc:
-        raise DatapackFrameError(f"Failed to read video frames from {path}: {exc}") from exc
+        raise DatapackFrameError(
+            f"Failed to read video frames from {path}: {exc}"
+        ) from exc
     if frames is None:
         return []
     if frames.ndim == 3:
@@ -440,7 +461,9 @@ def _read_npz_frames(path: Path) -> List[np.ndarray]:
     try:
         data = np.load(path, allow_pickle=False)
     except Exception as exc:
-        raise DatapackFrameError(f"Failed to load npz frames from {path}: {exc}") from exc
+        raise DatapackFrameError(
+            f"Failed to load npz frames from {path}: {exc}"
+        ) from exc
     for key in ("frames", "rgb", "rgb_frames"):
         if key in data:
             arr = np.asarray(data[key])
@@ -450,7 +473,9 @@ def _read_npz_frames(path: Path) -> List[np.ndarray]:
     return []
 
 
-def _load_frames_from_npz(path: Path) -> Tuple[List[np.ndarray], Optional[List[np.ndarray]], Optional[List[np.ndarray]]]:
+def _load_frames_from_npz(
+    path: Path,
+) -> Tuple[List[np.ndarray], Optional[List[np.ndarray]], Optional[List[np.ndarray]]]:
     rgb = _read_npz_frames(path)
     return rgb, None, None
 
@@ -486,7 +511,11 @@ def _validate_camera(metadata: Dict[str, Any], camera_name: str) -> None:
                     f"Requested camera '{camera_name}' not found. Available: {bundle_cameras}"
                 )
     default_camera = metadata.get("camera_name")
-    if isinstance(default_camera, str) and default_camera and camera_name != default_camera:
+    if (
+        isinstance(default_camera, str)
+        and default_camera
+        and camera_name != default_camera
+    ):
         raise DatapackFrameError(
             f"Requested camera '{camera_name}' not found. Available: [{default_camera}]"
         )
@@ -595,10 +624,22 @@ def _build_camera_params(
 
 def _default_camera_pose(camera_name: str) -> Dict[str, Tuple[float, float, float]]:
     if camera_name == "top":
-        return {"position": (0.0, 0.0, 2.0), "look_at": (0.0, 0.0, 0.0), "up": (0.0, 1.0, 0.0)}
+        return {
+            "position": (0.0, 0.0, 2.0),
+            "look_at": (0.0, 0.0, 0.0),
+            "up": (0.0, 1.0, 0.0),
+        }
     if camera_name == "wrist":
-        return {"position": (0.3, -0.3, 0.6), "look_at": (0.0, 0.0, 0.0), "up": (0.0, 0.0, 1.0)}
-    return {"position": (0.0, -1.5, 1.0), "look_at": (0.0, 0.0, 0.0), "up": (0.0, 0.0, 1.0)}
+        return {
+            "position": (0.3, -0.3, 0.6),
+            "look_at": (0.0, 0.0, 0.0),
+            "up": (0.0, 0.0, 1.0),
+        }
+    return {
+        "position": (0.0, -1.5, 1.0),
+        "look_at": (0.0, 0.0, 0.0),
+        "up": (0.0, 0.0, 1.0),
+    }
 
 
 def _build_instance_masks(
@@ -656,7 +697,12 @@ def _render_vector_proxy_frames(
     camera_name: str,
     max_frames: Optional[int],
     seed: Optional[int],
-) -> Tuple[List[np.ndarray], Optional[List[np.ndarray]], Optional[List[np.ndarray]], CameraParams]:
+) -> Tuple[
+    List[np.ndarray],
+    Optional[List[np.ndarray]],
+    Optional[List[np.ndarray]],
+    CameraParams,
+]:
     trajectory = _load_trajectory_payload(path)
     scene_spec = _extract_scene_spec(trajectory)
     if scene_spec is None:
@@ -667,7 +713,10 @@ def _render_vector_proxy_frames(
 
     states = _extract_states(trajectory)
     try:
-        from src.envs.workcell_env.observations.mujoco_render import render_workcell_frames
+        from src.envs.workcell_env.observations.mujoco_render import (
+            render_workcell_frames,
+        )
+
         return render_workcell_frames(
             scene_spec=scene_spec,
             states=states,
@@ -676,7 +725,9 @@ def _render_vector_proxy_frames(
             seed=seed,
         )
     except Exception as exc:
-        raise DatapackFrameError(f"Failed to render vector proxy frames: {exc}") from exc
+        raise DatapackFrameError(
+            f"Failed to render vector proxy frames: {exc}"
+        ) from exc
 
 
 def _load_trajectory_payload(path: Path) -> Optional[Dict[str, Any]]:
@@ -707,6 +758,7 @@ def _extract_scene_spec(trajectory: Optional[Dict[str, Any]]) -> Optional[Any]:
         return None
     try:
         from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
+
         if isinstance(scene_spec, WorkcellSceneSpec):
             return scene_spec
         if isinstance(scene_spec, dict):
@@ -716,7 +768,9 @@ def _extract_scene_spec(trajectory: Optional[Dict[str, Any]]) -> Optional[Any]:
     return None
 
 
-def _extract_states(trajectory: Optional[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
+def _extract_states(
+    trajectory: Optional[Dict[str, Any]],
+) -> Optional[List[Dict[str, Any]]]:
     if not trajectory:
         return None
     states = trajectory.get("states")
@@ -733,14 +787,15 @@ def _build_semantic_context(
     num_frames: int,
 ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]], Dict[str, Any]]:
     trajectory = _load_trajectory_payload(path)
-    scene_spec = _extract_scene_spec(trajectory) or _extract_scene_spec_from_metadata(metadata)
+    scene_spec = _extract_scene_spec(trajectory) or _extract_scene_spec_from_metadata(
+        metadata
+    )
     object_catalog = _build_scene_object_catalog(scene_spec)
     segmentation_map = _extract_segmentation_label_map(metadata)
 
     if not segmentation_map and object_catalog:
         segmentation_map = {
-            str(index): dict(obj)
-            for index, obj in enumerate(object_catalog, start=1)
+            str(index): dict(obj) for index, obj in enumerate(object_catalog, start=1)
         }
 
     class_labels: List[Dict[str, str]] = []
@@ -752,11 +807,17 @@ def _build_semantic_context(
         for frame in seg_frames[:num_frames]:
             labels_for_frame: Dict[str, str] = {}
             refs_for_frame: Dict[str, str] = {}
-            frame_arr = frame[..., 0] if frame.ndim == 3 and frame.shape[-1] in (1, 2, 3, 4) else frame
+            frame_arr = (
+                frame[..., 0]
+                if frame.ndim == 3 and frame.shape[-1] in (1, 2, 3, 4)
+                else frame
+            )
             for raw_uid in [value for value in np.unique(frame_arr) if int(value) != 0]:
                 uid = str(int(raw_uid))
                 label_meta = segmentation_map.get(uid, {})
-                class_name = _normalize_semantic_label(label_meta.get("class_name") or f"instance_{uid}")
+                class_name = _normalize_semantic_label(
+                    label_meta.get("class_name") or f"instance_{uid}"
+                )
                 object_id = str(label_meta.get("object_id") or "")
                 labels_for_frame[uid] = class_name
                 if object_id:
@@ -773,12 +834,11 @@ def _build_semantic_context(
         object_refs.append({})
 
     semantic_tags: set[str] = set()
-    task_id = str(
-        (metadata.get("metadata") or {}).get("task_id")
-        if isinstance(metadata.get("metadata"), dict)
-        else metadata.get("task_id")
-        or ""
+    nested_metadata = metadata.get("metadata")
+    task_metadata: Dict[str, Any] = (
+        nested_metadata if isinstance(nested_metadata, dict) else {}
     )
+    task_id = str(task_metadata.get("task_id") or metadata.get("task_id") or "")
     if task_id:
         semantic_tags.add(f"task:{_normalize_semantic_label(task_id)}")
     semantic_tags.update(
@@ -787,7 +847,9 @@ def _build_semantic_context(
         if str(tag).strip()
     )
     for obj in object_catalog:
-        semantic_tags.update(str(tag) for tag in obj.get("semantic_tags", []) if str(tag).strip())
+        semantic_tags.update(
+            str(tag) for tag in obj.get("semantic_tags", []) if str(tag).strip()
+        )
     for class_name in known_class_names:
         semantic_tags.add(f"object:{class_name}")
 
@@ -795,15 +857,20 @@ def _build_semantic_context(
     if _extract_segmentation_label_map(metadata):
         label_source = "metadata_segmentation_map"
 
-    task_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), dict) else {}
     semantic_context = {
         "task_id": str(task_metadata.get("task_id") or metadata.get("task_id") or ""),
-        "episode_id": str(task_metadata.get("episode_id") or metadata.get("episode_id") or path.name),
+        "episode_id": str(
+            task_metadata.get("episode_id") or metadata.get("episode_id") or path.name
+        ),
         "semantic_tags": sorted(tag for tag in semantic_tags if tag),
         "label_source": label_source,
         "scene_object_catalog": object_catalog,
         "segmentation_labels": segmentation_map,
-        "class_label_coverage": float(len(known_class_names) / max(len(object_catalog), 1)) if object_catalog else 0.0,
+        "class_label_coverage": float(
+            len(known_class_names) / max(len(object_catalog), 1)
+        )
+        if object_catalog
+        else 0.0,
         "observed_object_ref_count": int(len(observed_object_refs)),
     }
     return class_labels, object_refs, semantic_context
@@ -852,8 +919,12 @@ def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any
                 "object_id": str(object_id),
                 "class_name": _normalize_semantic_label(class_name),
                 "category": str(category),
-                "semantic_tags": sorted({str(tag) for tag in semantic_tags if str(tag).strip()}),
-                "affordances": sorted({str(tag) for tag in (affordances or []) if str(tag).strip()}),
+                "semantic_tags": sorted(
+                    {str(tag) for tag in semantic_tags if str(tag).strip()}
+                ),
+                "affordances": sorted(
+                    {str(tag) for tag in (affordances or []) if str(tag).strip()}
+                ),
             }
         )
 
@@ -862,15 +933,26 @@ def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any
             object_id=station.id,
             class_name=getattr(station, "station_type", station.id),
             category="station",
-            semantic_tags=["station", "support_surface", "category:station", f"object:{getattr(station, 'station_type', station.id)}"],
-            affordances=[str(cap).lower() for cap in getattr(station, "capabilities", ())],
+            semantic_tags=[
+                "station",
+                "support_surface",
+                "category:station",
+                f"object:{getattr(station, 'station_type', station.id)}",
+            ],
+            affordances=[
+                str(cap).lower() for cap in getattr(station, "capabilities", ())
+            ],
         )
     for fixture in getattr(scene_spec, "fixtures", []) or []:
         _append(
             object_id=fixture.id,
             class_name=getattr(fixture, "fixture_type", fixture.id),
             category="fixture",
-            semantic_tags=["fixture", "category:fixture", f"object:{getattr(fixture, 'fixture_type', fixture.id)}"],
+            semantic_tags=[
+                "fixture",
+                "category:fixture",
+                f"object:{getattr(fixture, 'fixture_type', fixture.id)}",
+            ],
             affordances=["stabilize", "clamp"],
         )
     for container in getattr(scene_spec, "containers", []) or []:
@@ -878,7 +960,11 @@ def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any
             object_id=container.id,
             class_name=getattr(container, "container_type", container.id),
             category="container",
-            semantic_tags=["container", "category:container", f"object:{getattr(container, 'container_type', container.id)}"],
+            semantic_tags=[
+                "container",
+                "category:container",
+                f"object:{getattr(container, 'container_type', container.id)}",
+            ],
             affordances=["contain", "receive"],
         )
     for conveyor in getattr(scene_spec, "conveyors", []) or []:
@@ -886,7 +972,12 @@ def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any
             object_id=conveyor.id,
             class_name="conveyor_segment",
             category="conveyor",
-            semantic_tags=["conveyor", "support_surface", "dynamic_surface", "object:conveyor_segment"],
+            semantic_tags=[
+                "conveyor",
+                "support_surface",
+                "dynamic_surface",
+                "object:conveyor_segment",
+            ],
             affordances=["transport"],
         )
     for part in getattr(scene_spec, "parts", []) or []:
@@ -910,7 +1001,11 @@ def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any
             object_id=tool.id,
             class_name=getattr(tool, "tool_type", tool.id),
             category="tool",
-            semantic_tags=["tool", "category:tool", f"object:{getattr(tool, 'tool_type', tool.id)}"],
+            semantic_tags=[
+                "tool",
+                "category:tool",
+                f"object:{getattr(tool, 'tool_type', tool.id)}",
+            ],
             affordances=["grasp", "manipulate"],
         )
     if not getattr(scene_spec, "tools", []):
@@ -924,7 +1019,9 @@ def _build_scene_object_catalog(scene_spec: Optional[Any]) -> List[Dict[str, Any
     return catalog
 
 
-def _extract_segmentation_label_map(metadata: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def _extract_segmentation_label_map(
+    metadata: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
     if not isinstance(metadata, dict):
         return {}
     candidates = [
@@ -944,7 +1041,12 @@ def _extract_segmentation_label_map(metadata: Dict[str, Any]) -> Dict[str, Dict[
             if isinstance(value, dict):
                 mapping[normalized_key] = {
                     "object_id": str(value.get("object_id") or value.get("id") or ""),
-                    "class_name": _normalize_semantic_label(value.get("class_name") or value.get("label") or value.get("type") or ""),
+                    "class_name": _normalize_semantic_label(
+                        value.get("class_name")
+                        or value.get("label")
+                        or value.get("type")
+                        or ""
+                    ),
                     "category": str(value.get("category") or ""),
                 }
             else:

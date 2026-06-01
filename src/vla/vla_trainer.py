@@ -10,22 +10,36 @@ Trains the VLA planner on:
 import os
 import json
 import numpy as np
-from collections import defaultdict
+from typing import Any
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    from torch.utils.data import Dataset, DataLoader
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-
-from .transformer_planner import VLATransformerPlanner, VLAInput, VLAPlan
 from src.hrl.skills import SkillID
 
+_torch: Any
+_nn: Any
+_optim: Any
+_Dataset: Any
+try:
+    import torch as _torch
+    import torch.nn as _nn
+    import torch.optim as _optim
+    from torch.utils.data import Dataset as _Dataset
 
-class VLADataset(Dataset if TORCH_AVAILABLE else object):
+    TORCH_AVAILABLE = True
+except ImportError:
+    _torch = None
+    _nn = None
+    _optim = None
+    _Dataset = object
+    TORCH_AVAILABLE = False
+
+torch = _torch
+nn = _nn
+optim = _optim
+Dataset = _Dataset
+_DATASET_BASE: Any = Dataset if TORCH_AVAILABLE else object
+
+
+class VLADataset(_DATASET_BASE):
     """
     Dataset for VLA training.
 
@@ -51,36 +65,38 @@ class VLADataset(Dataset if TORCH_AVAILABLE else object):
         traj = self.trajectories[idx]
 
         # Tokenize instruction
-        token_ids = self.tokenizer.encode(traj['instruction'], self.max_seq_len)
+        token_ids = self.tokenizer.encode(traj["instruction"], self.max_seq_len)
         token_ids = torch.tensor(token_ids, dtype=torch.long)
 
         # Ground truth skill sequence
-        gt_skills = torch.tensor(traj['skill_sequence'], dtype=torch.long)
+        gt_skills = torch.tensor(traj["skill_sequence"], dtype=torch.long)
 
         # Ground truth parameters (if available)
-        if 'skill_params' in traj:
-            gt_params = torch.tensor(traj['skill_params'], dtype=torch.float32)
+        if "skill_params" in traj:
+            gt_params = torch.tensor(traj["skill_params"], dtype=torch.float32)
         else:
-            gt_params = torch.zeros(len(traj['skill_sequence']), 5)
+            gt_params = torch.zeros(len(traj["skill_sequence"]), 5)
 
         # Optional features
         sample = {
-            'token_ids': token_ids,
-            'gt_skills': gt_skills,
-            'gt_params': gt_params,
+            "token_ids": token_ids,
+            "gt_skills": gt_skills,
+            "gt_params": gt_params,
         }
 
-        if 'z_v' in traj:
-            sample['z_v'] = torch.tensor(traj['z_v'], dtype=torch.float32)
+        if "z_v" in traj:
+            sample["z_v"] = torch.tensor(traj["z_v"], dtype=torch.float32)
 
-        if 'state' in traj:
-            sample['state'] = torch.tensor(traj['state'], dtype=torch.float32)
+        if "state" in traj:
+            sample["state"] = torch.tensor(traj["state"], dtype=torch.float32)
 
-        if 'risk_map' in traj:
-            sample['risk_map'] = torch.tensor(traj['risk_map'], dtype=torch.float32)
+        if "risk_map" in traj:
+            sample["risk_map"] = torch.tensor(traj["risk_map"], dtype=torch.float32)
 
-        if 'affordance_map' in traj:
-            sample['affordance_map'] = torch.tensor(traj['affordance_map'], dtype=torch.float32)
+        if "affordance_map" in traj:
+            sample["affordance_map"] = torch.tensor(
+                traj["affordance_map"], dtype=torch.float32
+            )
 
         return sample
 
@@ -96,37 +112,37 @@ def collate_vla_batch(batch):
         collated: dict with batched tensors
     """
     # Stack fixed-size tensors
-    token_ids = torch.stack([s['token_ids'] for s in batch])
+    token_ids = torch.stack([s["token_ids"] for s in batch])
 
     # Pad skill sequences to max length in batch
-    max_skill_len = max(len(s['gt_skills']) for s in batch)
+    max_skill_len = max(len(s["gt_skills"]) for s in batch)
 
     gt_skills = torch.zeros(len(batch), max_skill_len, dtype=torch.long)
     gt_params = torch.zeros(len(batch), max_skill_len, 5)
 
     for i, s in enumerate(batch):
-        skill_len = len(s['gt_skills'])
-        gt_skills[i, :skill_len] = s['gt_skills']
-        gt_params[i, :skill_len] = s['gt_params']
+        skill_len = len(s["gt_skills"])
+        gt_skills[i, :skill_len] = s["gt_skills"]
+        gt_params[i, :skill_len] = s["gt_params"]
 
     collated = {
-        'token_ids': token_ids,
-        'gt_skills': gt_skills,
-        'gt_params': gt_params,
+        "token_ids": token_ids,
+        "gt_skills": gt_skills,
+        "gt_params": gt_params,
     }
 
     # Optional features (if all samples have them)
-    if 'z_v' in batch[0]:
-        collated['z_v'] = torch.stack([s['z_v'] for s in batch])
+    if "z_v" in batch[0]:
+        collated["z_v"] = torch.stack([s["z_v"] for s in batch])
 
-    if 'state' in batch[0]:
-        collated['state'] = torch.stack([s['state'] for s in batch])
+    if "state" in batch[0]:
+        collated["state"] = torch.stack([s["state"] for s in batch])
 
-    if 'risk_map' in batch[0]:
-        collated['risk_map'] = torch.stack([s['risk_map'] for s in batch])
+    if "risk_map" in batch[0]:
+        collated["risk_map"] = torch.stack([s["risk_map"] for s in batch])
 
-    if 'affordance_map' in batch[0]:
-        collated['affordance_map'] = torch.stack([s['affordance_map'] for s in batch])
+    if "affordance_map" in batch[0]:
+        collated["affordance_map"] = torch.stack([s["affordance_map"] for s in batch])
 
     return collated
 
@@ -136,13 +152,7 @@ class VLATrainer:
     Trainer for VLA Transformer.
     """
 
-    def __init__(
-        self,
-        model,
-        lr=1e-4,
-        weight_decay=1e-5,
-        device='cpu'
-    ):
+    def __init__(self, model, lr=1e-4, weight_decay=1e-5, device="cpu"):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for VLATrainer")
 
@@ -150,16 +160,11 @@ class VLATrainer:
         self.device = device
 
         self.optimizer = optim.AdamW(
-            model.parameters(),
-            lr=lr,
-            weight_decay=weight_decay
+            model.parameters(), lr=lr, weight_decay=weight_decay
         )
 
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer,
-            mode='min',
-            factor=0.5,
-            patience=10
+            self.optimizer, mode="min", factor=0.5, patience=10
         )
 
         # Training statistics
@@ -186,31 +191,30 @@ class VLATrainer:
             self.optimizer.zero_grad()
 
             # Move to device
-            token_ids = batch['token_ids'].to(self.device)
-            gt_skills = batch['gt_skills'].to(self.device)
-            gt_params = batch['gt_params'].to(self.device)
+            token_ids = batch["token_ids"].to(self.device)
+            gt_skills = batch["gt_skills"].to(self.device)
+            gt_params = batch["gt_params"].to(self.device)
 
             # Optional features
-            z_v = batch.get('z_v', None)
+            z_v = batch.get("z_v", None)
             if z_v is not None:
                 z_v = z_v.to(self.device)
 
-            state = batch.get('state', None)
+            state = batch.get("state", None)
             if state is not None:
                 state = state.to(self.device)
 
-            risk_map = batch.get('risk_map', None)
+            risk_map = batch.get("risk_map", None)
             if risk_map is not None:
                 risk_map = risk_map.to(self.device)
 
-            affordance_map = batch.get('affordance_map', None)
+            affordance_map = batch.get("affordance_map", None)
             if affordance_map is not None:
                 affordance_map = affordance_map.to(self.device)
 
             # Forward pass
             loss, metrics = self.model.compute_loss(
-                token_ids, gt_skills, gt_params,
-                z_v, state, risk_map, affordance_map
+                token_ids, gt_skills, gt_params, z_v, state, risk_map, affordance_map
             )
 
             # Backward pass
@@ -218,7 +222,7 @@ class VLATrainer:
             nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
 
-            epoch_loss += metrics['total_loss']
+            epoch_loss += metrics["total_loss"]
 
             # Compute skill accuracy
             with torch.no_grad():
@@ -240,8 +244,8 @@ class VLATrainer:
         self.skill_accuracies.append(avg_acc)
 
         return {
-            'loss': avg_loss,
-            'skill_accuracy': avg_acc,
+            "loss": avg_loss,
+            "skill_accuracy": avg_acc,
         }
 
     def evaluate(self, dataloader):
@@ -261,29 +265,34 @@ class VLATrainer:
 
         with torch.no_grad():
             for batch in dataloader:
-                token_ids = batch['token_ids'].to(self.device)
-                gt_skills = batch['gt_skills'].to(self.device)
-                gt_params = batch['gt_params'].to(self.device)
+                token_ids = batch["token_ids"].to(self.device)
+                gt_skills = batch["gt_skills"].to(self.device)
+                gt_params = batch["gt_params"].to(self.device)
 
-                z_v = batch.get('z_v', None)
+                z_v = batch.get("z_v", None)
                 if z_v is not None:
                     z_v = z_v.to(self.device)
 
-                state = batch.get('state', None)
+                state = batch.get("state", None)
                 if state is not None:
                     state = state.to(self.device)
 
-                risk_map = batch.get('risk_map', None)
+                risk_map = batch.get("risk_map", None)
                 if risk_map is not None:
                     risk_map = risk_map.to(self.device)
 
-                affordance_map = batch.get('affordance_map', None)
+                affordance_map = batch.get("affordance_map", None)
                 if affordance_map is not None:
                     affordance_map = affordance_map.to(self.device)
 
                 loss, _ = self.model.compute_loss(
-                    token_ids, gt_skills, gt_params,
-                    z_v, state, risk_map, affordance_map
+                    token_ids,
+                    gt_skills,
+                    gt_params,
+                    z_v,
+                    state,
+                    risk_map,
+                    affordance_map,
                 )
 
                 total_loss += loss.item()
@@ -306,8 +315,8 @@ class VLATrainer:
         self.scheduler.step(avg_loss)
 
         return {
-            'val_loss': avg_loss,
-            'val_accuracy': avg_acc,
+            "val_loss": avg_loss,
+            "val_accuracy": avg_acc,
         }
 
     def train(
@@ -316,7 +325,7 @@ class VLATrainer:
         val_loader=None,
         n_epochs=100,
         log_interval=10,
-        save_path=None
+        save_path=None,
     ):
         """
         Full training loop.
@@ -333,7 +342,7 @@ class VLATrainer:
         """
         print("Training VLA Transformer...")
 
-        best_val_loss = float('inf')
+        best_val_loss = float("inf")
 
         for epoch in range(n_epochs):
             train_metrics = self.train_epoch(train_loader)
@@ -341,8 +350,8 @@ class VLATrainer:
             if val_loader is not None:
                 val_metrics = self.evaluate(val_loader)
 
-                if val_metrics['val_loss'] < best_val_loss:
-                    best_val_loss = val_metrics['val_loss']
+                if val_metrics["val_loss"] < best_val_loss:
+                    best_val_loss = val_metrics["val_loss"]
                     if save_path:
                         self.model.save(save_path)
                         print(f"  Saved best model (val_loss={best_val_loss:.4f})")
@@ -359,9 +368,9 @@ class VLATrainer:
                 print(msg)
 
         history = {
-            'train_losses': self.train_losses,
-            'val_losses': self.val_losses,
-            'skill_accuracies': self.skill_accuracies,
+            "train_losses": self.train_losses,
+            "val_losses": self.val_losses,
+            "skill_accuracies": self.skill_accuracies,
         }
 
         return history
@@ -392,8 +401,7 @@ def generate_synthetic_vla_data(n_samples=1000):
     ]
 
     # Modifiers
-    speed_modifiers = ['', 'quickly ', 'slowly ', 'carefully ', 'safely ']
-    clearance_modifiers = ['', 'maintain clearance ', 'avoid collision ', 'be careful ']
+    speed_modifiers = ["", "quickly ", "slowly ", "carefully ", "safely "]
 
     trajectories = []
 
@@ -433,26 +441,29 @@ def generate_synthetic_vla_data(n_samples=1000):
         # Skill parameters (with noise)
         skill_params = []
         for sid in skill_sequence:
-            params = np.array([
-                0.15 + np.random.normal(0, 0.02),  # clearance
-                0.6 + np.random.normal(0, 0.1),    # speed
-                0.5 + np.random.normal(0, 0.05),   # grasp force
-                0.5 + np.random.normal(0, 0.05),   # retract speed
-                1.0  # normalized timeout
-            ], dtype=np.float32)
+            params = np.array(
+                [
+                    0.15 + np.random.normal(0, 0.02),  # clearance
+                    0.6 + np.random.normal(0, 0.1),  # speed
+                    0.5 + np.random.normal(0, 0.05),  # grasp force
+                    0.5 + np.random.normal(0, 0.05),  # retract speed
+                    1.0,  # normalized timeout
+                ],
+                dtype=np.float32,
+            )
             params = np.clip(params, 0, 1)
             skill_params.append(params)
 
         traj = {
-            'instruction': base_instruction,
-            'skill_sequence': skill_sequence,
-            'skill_params': skill_params,
+            "instruction": base_instruction,
+            "skill_sequence": skill_sequence,
+            "skill_params": skill_params,
         }
 
         # Optional: add synthetic features
         if np.random.random() < 0.5:
-            traj['z_v'] = np.random.randn(128).astype(np.float32) * 0.1
-            traj['state'] = np.random.randn(13).astype(np.float32) * 0.1
+            traj["z_v"] = np.random.randn(128).astype(np.float32) * 0.1
+            traj["state"] = np.random.randn(13).astype(np.float32) * 0.1
 
         trajectories.append(traj)
 
@@ -465,37 +476,39 @@ def save_vla_dataset(trajectories, path):
     serializable = []
     for traj in trajectories:
         item = {
-            'instruction': traj['instruction'],
-            'skill_sequence': traj['skill_sequence'],
-            'skill_params': [p.tolist() for p in traj['skill_params']],
+            "instruction": traj["instruction"],
+            "skill_sequence": traj["skill_sequence"],
+            "skill_params": [p.tolist() for p in traj["skill_params"]],
         }
-        if 'z_v' in traj:
-            item['z_v'] = traj['z_v'].tolist()
-        if 'state' in traj:
-            item['state'] = traj['state'].tolist()
+        if "z_v" in traj:
+            item["z_v"] = traj["z_v"].tolist()
+        if "state" in traj:
+            item["state"] = traj["state"].tolist()
         serializable.append(item)
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w') as f:
+    with open(path, "w") as f:
         json.dump(serializable, f)
 
 
 def load_vla_dataset(path):
     """Load VLA training dataset."""
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         data = json.load(f)
 
     trajectories = []
     for item in data:
         traj = {
-            'instruction': item['instruction'],
-            'skill_sequence': item['skill_sequence'],
-            'skill_params': [np.array(p, dtype=np.float32) for p in item['skill_params']],
+            "instruction": item["instruction"],
+            "skill_sequence": item["skill_sequence"],
+            "skill_params": [
+                np.array(p, dtype=np.float32) for p in item["skill_params"]
+            ],
         }
-        if 'z_v' in item:
-            traj['z_v'] = np.array(item['z_v'], dtype=np.float32)
-        if 'state' in item:
-            traj['state'] = np.array(item['state'], dtype=np.float32)
+        if "z_v" in item:
+            traj["z_v"] = np.array(item["z_v"], dtype=np.float32)
+        if "state" in item:
+            traj["state"] = np.array(item["state"], dtype=np.float32)
         trajectories.append(traj)
 
     return trajectories

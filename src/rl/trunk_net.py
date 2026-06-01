@@ -3,11 +3,11 @@ Shared trunk that fuses vision/state/condition features for Hydra policies.
 
 Minimal, deterministic, and flag-free: callers control which encoders to pass.
 """
-from typing import Any, Dict, Optional, Tuple, Union
+
+from typing import Any, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from src.observation.condition_vector import ConditionVector
 
@@ -20,11 +20,15 @@ def _pad_or_trim(tensor: torch.Tensor, target_dim: int) -> torch.Tensor:
     if current > target_dim:
         return tensor[..., :target_dim]
     pad_width = target_dim - current
-    pad = torch.zeros(*tensor.shape[:-1], pad_width, device=tensor.device, dtype=tensor.dtype)
+    pad = torch.zeros(
+        *tensor.shape[:-1], pad_width, device=tensor.device, dtype=tensor.dtype
+    )
     return torch.cat([tensor, pad], dim=-1)
 
 
-def _tensor_from_iterable(values: Any, device: torch.device, fallback_dim: int) -> torch.Tensor:
+def _tensor_from_iterable(
+    values: Any, device: torch.device, fallback_dim: int
+) -> torch.Tensor:
     """Convert lists/arrays to 1D tensor; fallback to zeros."""
     try:
         tensor = torch.as_tensor(values, device=device, dtype=torch.float32).flatten()
@@ -98,9 +102,13 @@ class TrunkNet(nn.Module):
         use_condition_vector_for_policy: Optional[bool] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         device = next(self.parameters()).device
-        use_condition = self.use_condition_vector if use_condition is None else use_condition
+        use_condition = (
+            self.use_condition_vector if use_condition is None else use_condition
+        )
         use_policy_condition = (
-            self.use_condition_vector_for_policy if use_condition_vector_for_policy is None else use_condition_vector_for_policy
+            self.use_condition_vector_for_policy
+            if use_condition_vector_for_policy is None
+            else use_condition_vector_for_policy
         )
         if not use_condition:
             condition = None
@@ -110,7 +118,9 @@ class TrunkNet(nn.Module):
 
         vision_embed = self.vision_proj(_pad_or_trim(vision_vec, self.vision_dim))
         state_embed = self.state_proj(_pad_or_trim(state_vec, self.state_dim))
-        condition_embed = self.condition_proj(_pad_or_trim(condition_vec, self.condition_dim))
+        condition_embed = self.condition_proj(
+            _pad_or_trim(condition_vec, self.condition_dim)
+        )
 
         if self.use_condition_film:
             gating = torch.sigmoid(condition_embed)
@@ -121,7 +131,9 @@ class TrunkNet(nn.Module):
         trunk_features = self.fusion(fused)
 
         if use_policy_condition and condition is not None:
-            conditioned = self._condition_policy_features(trunk_features, condition_embed)
+            conditioned = self._condition_policy_features(
+                trunk_features, condition_embed
+            )
             return trunk_features, conditioned
         return trunk_features
 
@@ -150,7 +162,9 @@ class TrunkNet(nn.Module):
                     for k2, v2 in sorted(val.items(), key=lambda kv: str(kv[0])):
                         flat.append(float(v2) if isinstance(v2, (int, float)) else 0.0)
                 elif isinstance(val, (list, tuple)):
-                    flat.extend([float(v) if isinstance(v, (int, float)) else 0.0 for v in val])
+                    flat.extend(
+                        [float(v) if isinstance(v, (int, float)) else 0.0 for v in val]
+                    )
                 elif isinstance(val, (int, float)):
                     flat.append(float(val))
             return _tensor_from_iterable(flat, device, self.state_dim)
@@ -168,20 +182,28 @@ class TrunkNet(nn.Module):
             if policy_obs and policy_obs.get("condition") is not None:
                 candidate = policy_obs.get("condition")
             if candidate is None:
-                candidate = obs_override.get("condition_vector") or obs_override.get("condition")
+                candidate = obs_override.get("condition_vector") or obs_override.get(
+                    "condition"
+                )
         if candidate is None and hasattr(obs_override, "condition"):
             candidate = getattr(obs_override, "condition")
         if isinstance(candidate, ConditionVector):
             try:
                 vec = candidate.to_vector()
-                return torch.as_tensor(vec, device=device, dtype=torch.float32).flatten()
+                return torch.as_tensor(
+                    vec, device=device, dtype=torch.float32
+                ).flatten()
             except Exception:
-                return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
+                return torch.zeros(
+                    self.condition_dim, device=device, dtype=torch.float32
+                )
         if candidate is not None:
             return _tensor_from_iterable(candidate, device, self.condition_dim)
         return torch.zeros(self.condition_dim, device=device, dtype=torch.float32)
 
-    def _extract_conditioned_vision(self, obs: Any, device: torch.device) -> Optional[torch.Tensor]:
+    def _extract_conditioned_vision(
+        self, obs: Any, device: torch.device
+    ) -> Optional[torch.Tensor]:
         if isinstance(obs, dict):
             if "conditioned_vision_vector" in obs:
                 tensor = _tensor_from_iterable(
@@ -191,18 +213,24 @@ class TrunkNet(nn.Module):
                     return tensor
             container = obs.get("policy_observation") or {}
             if container and "vision" in container:
-                flattened_tensor = self._flatten_vision_block(container.get("vision"), device)
+                flattened_tensor = self._flatten_vision_block(
+                    container.get("vision"), device
+                )
                 if flattened_tensor is not None and flattened_tensor.numel() > 0:
                     return flattened_tensor
         if hasattr(obs, "policy_observation"):
             policy_obs = getattr(obs, "policy_observation")
             if isinstance(policy_obs, dict):
-                flattened_tensor = self._flatten_vision_block(policy_obs.get("vision"), device)
+                flattened_tensor = self._flatten_vision_block(
+                    policy_obs.get("vision"), device
+                )
                 if flattened_tensor is not None and flattened_tensor.numel() > 0:
                     return flattened_tensor
         return None
 
-    def _flatten_vision_block(self, vision_block: Any, device: torch.device) -> Optional[torch.Tensor]:
+    def _flatten_vision_block(
+        self, vision_block: Any, device: torch.device
+    ) -> Optional[torch.Tensor]:
         if vision_block is None:
             return None
         if isinstance(vision_block, torch.Tensor):
@@ -212,7 +240,9 @@ class TrunkNet(nn.Module):
             # Prefer pre-flattened vectors if present
             for key in ("vision_vector", "conditioned_vision_vector", "vector"):
                 if key in vision_block and vision_block[key] is not None:
-                    tensor = _tensor_from_iterable(vision_block[key], device, self.vision_dim)
+                    tensor = _tensor_from_iterable(
+                        vision_block[key], device, self.vision_dim
+                    )
                     if tensor.numel() > 0:
                         return tensor
             for candidate in (
@@ -224,13 +254,17 @@ class TrunkNet(nn.Module):
                 if flattened_tensor is not None and flattened_tensor.numel() > 0:
                     return flattened_tensor
             if "risk_map" in vision_block and vision_block["risk_map"] is not None:
-                tensor = _tensor_from_iterable(vision_block["risk_map"], device, self.vision_dim)
+                tensor = _tensor_from_iterable(
+                    vision_block["risk_map"], device, self.vision_dim
+                )
                 if tensor.numel() > 0:
                     return tensor
             return None
         return _tensor_from_iterable(vision_block, device, self.vision_dim)
 
-    def _flatten_pyramid_candidate(self, candidate: Any, device: torch.device) -> Optional[torch.Tensor]:
+    def _flatten_pyramid_candidate(
+        self, candidate: Any, device: torch.device
+    ) -> Optional[torch.Tensor]:
         if candidate is None:
             return None
         try:
@@ -240,16 +274,24 @@ class TrunkNet(nn.Module):
             if isinstance(candidate, dict):
                 tensors = []
                 for key in sorted(candidate.keys()):
-                    tensors.append(torch.as_tensor(candidate[key], device=device, dtype=torch.float32).flatten())
+                    tensors.append(
+                        torch.as_tensor(
+                            candidate[key], device=device, dtype=torch.float32
+                        ).flatten()
+                    )
                 if tensors:
                     return torch.cat(tensors, dim=0)
                 return None
-            tensor = torch.as_tensor(candidate, device=device, dtype=torch.float32).flatten()
+            tensor = torch.as_tensor(
+                candidate, device=device, dtype=torch.float32
+            ).flatten()
             return tensor if tensor.numel() > 0 else None
         except Exception:
             return None
 
-    def _condition_policy_features(self, trunk_features: torch.Tensor, condition_embed: torch.Tensor) -> torch.Tensor:
+    def _condition_policy_features(
+        self, trunk_features: torch.Tensor, condition_embed: torch.Tensor
+    ) -> torch.Tensor:
         if not self.use_condition_vector_for_policy:
             return trunk_features
         if self.condition_fusion_mode == "concat":
@@ -260,7 +302,9 @@ class TrunkNet(nn.Module):
         gamma, beta = torch.chunk(gamma_beta, 2, dim=-1)
         return trunk_features * (1 + gamma) + beta
 
-    def condition_policy_features(self, trunk_features: torch.Tensor, condition: Optional[ConditionVector]) -> Optional[torch.Tensor]:
+    def condition_policy_features(
+        self, trunk_features: torch.Tensor, condition: Optional[ConditionVector]
+    ) -> Optional[torch.Tensor]:
         """
         Apply the conditioning block to externally computed trunk features.
         Returns None if conditioning is disabled or no condition vector is provided.
@@ -269,5 +313,7 @@ class TrunkNet(nn.Module):
             return None
         device = trunk_features.device
         condition_vec = self._extract_condition(condition, device)
-        condition_embed = self.condition_proj(_pad_or_trim(condition_vec, self.condition_dim))
+        condition_embed = self.condition_proj(
+            _pad_or_trim(condition_vec, self.condition_dim)
+        )
         return self._condition_policy_features(trunk_features, condition_embed)

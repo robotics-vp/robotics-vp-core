@@ -7,7 +7,7 @@ Groups plane nodes and orchestrates rendering/editing operations.
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
@@ -15,6 +15,7 @@ import numpy as np
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -61,10 +62,7 @@ class NAGScene(nn.Module):
     @property
     def nodes(self) -> Dict[NAGNodeId, NAGPlaneNode]:
         """Get dictionary of nodes."""
-        return {
-            make_node_id(k): cast(NAGPlaneNode, v)
-            for k, v in self._nodes.items()
-        }
+        return {make_node_id(k): cast(NAGPlaneNode, v) for k, v in self._nodes.items()}
 
     def add_node(self, node_id: NAGNodeId, node: NAGPlaneNode) -> None:
         """
@@ -187,6 +185,7 @@ class NAGScene(nn.Module):
             Dict with "rgb", optionally "depth" and "node_index"
         """
         from src.vision.nag.renderer import render_scene
+
         return render_scene(
             scene=self,
             camera=camera,
@@ -197,10 +196,7 @@ class NAGScene(nn.Module):
 
     def get_foreground_nodes(self) -> List[NAGNodeId]:
         """Get all non-background node IDs."""
-        return [
-            nid for nid in self.list_nodes()
-            if nid != self.background_node_id
-        ]
+        return [nid for nid in self.list_nodes() if nid != self.background_node_id]
 
     def clone(self) -> "NAGScene":
         """Create a deep copy of the entire scene."""
@@ -218,7 +214,9 @@ class NAGScene(nn.Module):
         """Convert to dictionary for serialization."""
         return {
             "nodes": {str(nid): node.to_dict() for nid, node in self.nodes.items()},
-            "background_node_id": str(self.background_node_id) if self.background_node_id else None,
+            "background_node_id": str(self.background_node_id)
+            if self.background_node_id
+            else None,
             "metadata": self.metadata,
         }
 
@@ -244,12 +242,15 @@ class NAGScene(nn.Module):
             node = cast(NAGPlaneNode, raw_node)
             # Get corners of the plane
             extent = node.extent
-            corners_local = np.array([
-                [-extent[0]/2, -extent[1]/2, 0],
-                [extent[0]/2, -extent[1]/2, 0],
-                [extent[0]/2, extent[1]/2, 0],
-                [-extent[0]/2, extent[1]/2, 0],
-            ], dtype=np.float32)
+            corners_local = np.array(
+                [
+                    [-extent[0] / 2, -extent[1] / 2, 0],
+                    [extent[0] / 2, -extent[1] / 2, 0],
+                    [extent[0] / 2, extent[1] / 2, 0],
+                    [-extent[0] / 2, extent[1] / 2, 0],
+                ],
+                dtype=np.float32,
+            )
 
             # Transform to world (using t=0)
             pose = np.asarray(
@@ -266,6 +267,7 @@ class NAGScene(nn.Module):
 @dataclass
 class NAGSceneConfig:
     """Configuration for NAG scene fitting."""
+
     atlas_size: Tuple[int, int] = (256, 256)
     max_nodes: int = 10
     background_depth: float = 20.0
@@ -341,7 +343,9 @@ def create_scene_with_background(
     )
     bg_node.initialize_from_image(background_image)
 
-    scene = NAGScene(background_node_id=bg_node_id, metadata={"config": config.__dict__})
+    scene = NAGScene(
+        background_node_id=bg_node_id, metadata={"config": config.__dict__}
+    )
     scene.add_node(bg_node_id, bg_node)
 
     return scene

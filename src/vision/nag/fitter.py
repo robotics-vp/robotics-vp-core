@@ -8,8 +8,8 @@ objects and optimizing texture + pose parameters.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -18,6 +18,7 @@ try:
     import torch.nn as nn
     import torch.nn.functional as F
     from torch.optim import Adam
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -26,7 +27,11 @@ except ImportError:
     Adam = None  # type: ignore
     TORCH_AVAILABLE = False
 
-from src.vision.nag.types import CameraParams, NAGNodeId, PlaneParams, PoseSplineParams, make_node_id
+from src.vision.nag.types import (
+    CameraParams,
+    NAGNodeId,
+    make_node_id,
+)
 from src.vision.nag.plane_node import NAGPlaneNode, create_plane_node_from_box
 from src.vision.nag.scene import NAGScene, NAGSceneConfig, create_scene_with_background
 from src.vision.nag.renderer import render_scene
@@ -58,6 +63,7 @@ class FitterConfig:
         early_stop_loss: Stop if total loss drops below this threshold
         nan_check_interval: Check for NaN every N iterations
     """
+
     max_iters: int = 500
     lr: float = 1e-3
     atlas_size: Tuple[int, int] = (256, 256)
@@ -101,6 +107,7 @@ class FitStats:
         had_nan: Whether NaN was encountered during fitting
         per_node_error: Per-node reconstruction error (if computed)
     """
+
     final_loss: float
     final_photo_loss: float
     final_mask_loss: float
@@ -194,7 +201,7 @@ def initialize_node_from_box_and_mask(
 
     # Initialize pose spline from box trajectory
     if T > 1:
-        translations = []
+        translation_points: List[np.ndarray] = []
         for t_idx in range(T):
             t_box = box[t_idx].cpu().numpy()
             cx = (t_box[0] + t_box[2]) / 2
@@ -207,9 +214,9 @@ def initialize_node_from_box_and_mask(
 
             w2c = camera.world_from_cam[min(t_idx, camera.num_frames - 1)]
             point_world = (w2c[:3, :3] @ point_cam) + w2c[:3, 3]
-            translations.append(point_world)
+            translation_points.append(point_world)
 
-        translations = np.array(translations, dtype=np.float32)
+        translations = np.array(translation_points, dtype=np.float32)
         knot_times = np.linspace(0, 1, T, dtype=np.float32)
 
         with torch.no_grad():
@@ -295,7 +302,9 @@ def _validate_fit_inputs(
         for t in range(T):
             x1, y1, x2, y2 = box[t].tolist()
             if x2 <= x1 or y2 <= y1:
-                logger.warning(f"Degenerate box for {node_id} at frame {t}: {box[t].tolist()}")
+                logger.warning(
+                    f"Degenerate box for {node_id} at frame {t}: {box[t].tolist()}"
+                )
 
 
 def fit_nag_to_sequence(
@@ -395,7 +404,9 @@ def fit_nag_to_sequence(
         if T <= config.batch_frames:
             batch_indices = list(range(T))
         else:
-            batch_indices = np.random.choice(T, config.batch_frames, replace=False).tolist()
+            batch_indices = np.random.choice(
+                T, config.batch_frames, replace=False
+            ).tolist()
 
         total_loss = torch.tensor(0.0, device=device)
         photo_loss = torch.tensor(0.0, device=device)
@@ -408,7 +419,6 @@ def fit_nag_to_sequence(
             # Render scene
             rendered = render_scene(scene, camera, t)
             rendered_rgb = rendered["rgb"]  # (3, H, W)
-            rendered_alpha = rendered["alpha"].squeeze(0)  # (H, W)
 
             # Photometric loss (L1)
             photo = F.l1_loss(rendered_rgb, target_frame)
@@ -444,13 +454,13 @@ def fit_nag_to_sequence(
                 # Second derivative penalty (acceleration)
                 trans = node.spline_translations
                 accel = trans[2:] - 2 * trans[1:-1] + trans[:-2]
-                smooth_loss = smooth_loss + torch.mean(accel ** 2)
+                smooth_loss = smooth_loss + torch.mean(accel**2)
 
         # Total loss
         total_loss = (
-            config.photometric_weight * photo_loss +
-            config.mask_weight * mask_loss +
-            config.pose_smoothness_weight * smooth_loss
+            config.photometric_weight * photo_loss
+            + config.mask_weight * mask_loss
+            + config.pose_smoothness_weight * smooth_loss
         )
 
         # Check for NaN
@@ -477,7 +487,9 @@ def fit_nag_to_sequence(
 
         # Early stopping
         if total_loss.item() < config.early_stop_loss:
-            logger.info(f"Early stopping at iter {iteration + 1}: loss={total_loss.item():.6f}")
+            logger.info(
+                f"Early stopping at iter {iteration + 1}: loss={total_loss.item():.6f}"
+            )
             converged = True
             break
 

@@ -5,6 +5,7 @@ This runs in parallel to the existing kinematic env (src/envs/dishwashing_env.py
 is intended as an "energy bench" to exercise τ·ω-based energy metrics without touching
 the frozen Phase B stack.
 """
+
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -13,7 +14,6 @@ import pybullet as p  # type: ignore[import-not-found]
 import pybullet_data  # type: ignore[import-not-found,import-untyped]
 
 from src.config.econ_params import EconParams
-from src.envs.dishwashing_env import EpisodeInfoSummary, summarize_episode_info
 
 # Limb grouping (KUKA iiwa: 7 revolute joints; rough mapping)
 LIMB_GROUPS = {
@@ -95,7 +95,7 @@ class DishwashingArmEnv:
         self.physics_client = p.connect(p.DIRECT if self.headless else p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.8)
-        p.setTimeStep(1. / 240.)
+        p.setTimeStep(1.0 / 240.0)
 
         # Plane
         p.loadURDF("plane.urdf")
@@ -105,7 +105,7 @@ class DishwashingArmEnv:
             pybullet_data.getDataPath() + "/kuka_iiwa/model.urdf",
             basePosition=[0, 0, 0],
             useFixedBase=True,
-            flags=p.URDF_USE_INERTIA_FROM_FILE
+            flags=p.URDF_USE_INERTIA_FROM_FILE,
         )
 
         # Controlled joints: all revolute joints
@@ -120,7 +120,7 @@ class DishwashingArmEnv:
             self.robot_id,
             self.controlled_joint_ids,
             controlMode=p.VELOCITY_CONTROL,
-            forces=[0.0] * len(self.controlled_joint_ids)
+            forces=[0.0] * len(self.controlled_joint_ids),
         )
 
         # Reset episode stats
@@ -162,7 +162,7 @@ class DishwashingArmEnv:
             self.controlled_joint_ids,
             controlMode=p.VELOCITY_CONTROL,
             targetVelocities=target_vel.tolist(),
-            forces=[20.0] * len(self.controlled_joint_ids)
+            forces=[20.0] * len(self.controlled_joint_ids),
         )
 
         # Step simulation
@@ -182,12 +182,24 @@ class DishwashingArmEnv:
             name = f"joint_{jid}"
             wh = float(power[j_idx] * dt / 3600.0)
             self.joint_energy_Wh[name] = self.joint_energy_Wh.get(name, 0.0) + wh
-            self.joint_power_sum_W[name] = self.joint_power_sum_W.get(name, 0.0) + float(power[j_idx])
-            self.joint_peak_power_W[name] = max(self.joint_peak_power_W.get(name, 0.0), float(power[j_idx]))
-            self.joint_abs_vel_sum[name] = self.joint_abs_vel_sum.get(name, 0.0) + abs(float(omega[j_idx]))
-            self.joint_abs_tau_sum[name] = self.joint_abs_tau_sum.get(name, 0.0) + abs(float(tau[j_idx]))
-            self.joint_max_vel[name] = max(self.joint_max_vel.get(name, 0.0), abs(float(omega[j_idx])))
-            self.joint_max_tau[name] = max(self.joint_max_tau.get(name, 0.0), abs(float(tau[j_idx])))
+            self.joint_power_sum_W[name] = self.joint_power_sum_W.get(
+                name, 0.0
+            ) + float(power[j_idx])
+            self.joint_peak_power_W[name] = max(
+                self.joint_peak_power_W.get(name, 0.0), float(power[j_idx])
+            )
+            self.joint_abs_vel_sum[name] = self.joint_abs_vel_sum.get(name, 0.0) + abs(
+                float(omega[j_idx])
+            )
+            self.joint_abs_tau_sum[name] = self.joint_abs_tau_sum.get(name, 0.0) + abs(
+                float(tau[j_idx])
+            )
+            self.joint_max_vel[name] = max(
+                self.joint_max_vel.get(name, 0.0), abs(float(omega[j_idx]))
+            )
+            self.joint_max_tau[name] = max(
+                self.joint_max_tau.get(name, 0.0), abs(float(tau[j_idx]))
+            )
             dir_dict = self.joint_dir_counts.setdefault(name, {"pos": 0, "neg": 0})
             if omega[j_idx] >= 0:
                 dir_dict["pos"] += 1
@@ -197,7 +209,11 @@ class DishwashingArmEnv:
         # Per-limb aggregate
         limb_energy_step = {k: 0.0 for k in LIMB_GROUPS}
         for limb, jids in LIMB_GROUPS.items():
-            mask = [self.controlled_joint_ids.index(j) for j in jids if j in self.controlled_joint_ids]
+            mask = [
+                self.controlled_joint_ids.index(j)
+                for j in jids
+                if j in self.controlled_joint_ids
+            ]
             if mask:
                 limb_power = float(np.sum(power[mask]))
             else:
@@ -232,15 +248,22 @@ class DishwashingArmEnv:
             "attempts": self.attempts,
             "errors": self.errors,
             "energy_Wh": self.energy_Wh,
-            "energy_Wh_per_unit": self.energy_Wh / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+            "energy_Wh_per_unit": self.energy_Wh / max(self.completed, 1e-6)
+            if self.completed > 0
+            else 0.0,
             "units_done": self.completed,
             "limb_energy_Wh": self.limb_energy_Wh,
             "skill_energy_Wh": self.skill_energy_Wh,
             "energy_per_limb": {
                 limb: {
                     "Wh": self.limb_energy_Wh[limb],
-                    "Wh_per_unit": self.limb_energy_Wh[limb] / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                    "Wh_per_hour": self.limb_energy_Wh[limb] / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                    "Wh_per_unit": self.limb_energy_Wh[limb] / max(self.completed, 1e-6)
+                    if self.completed > 0
+                    else 0.0,
+                    "Wh_per_hour": self.limb_energy_Wh[limb]
+                    / max(self.t / 3600.0, 1e-6)
+                    if self.t > 0
+                    else 0.0,
                     "power_sum_W": self.limb_power_sum_W.get(limb, 0.0),
                     "power_peak_W": self.limb_peak_power_W.get(limb, 0.0),
                 }
@@ -250,23 +273,40 @@ class DishwashingArmEnv:
             "energy_per_joint": {
                 name: {
                     "Wh": self.joint_energy_Wh.get(name, 0.0),
-                    "Wh_per_unit": self.joint_energy_Wh.get(name, 0.0) / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                    "Wh_per_hour": self.joint_energy_Wh.get(name, 0.0) / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
-                    "avg_power_W": self.joint_power_sum_W.get(name, 0.0) / max(self.step_count, 1),
+                    "Wh_per_unit": self.joint_energy_Wh.get(name, 0.0)
+                    / max(self.completed, 1e-6)
+                    if self.completed > 0
+                    else 0.0,
+                    "Wh_per_hour": self.joint_energy_Wh.get(name, 0.0)
+                    / max(self.t / 3600.0, 1e-6)
+                    if self.t > 0
+                    else 0.0,
+                    "avg_power_W": self.joint_power_sum_W.get(name, 0.0)
+                    / max(self.step_count, 1),
                     "peak_power_W": self.joint_peak_power_W.get(name, 0.0),
-                    "avg_abs_velocity": self.joint_abs_vel_sum.get(name, 0.0) / max(self.step_count, 1),
+                    "avg_abs_velocity": self.joint_abs_vel_sum.get(name, 0.0)
+                    / max(self.step_count, 1),
                     "max_abs_velocity": self.joint_max_vel.get(name, 0.0),
-                    "avg_abs_torque": self.joint_abs_tau_sum.get(name, 0.0) / max(self.step_count, 1),
+                    "avg_abs_torque": self.joint_abs_tau_sum.get(name, 0.0)
+                    / max(self.step_count, 1),
                     "max_abs_torque": self.joint_max_tau.get(name, 0.0),
-                    "directionality": self.joint_dir_counts.get(name, {"pos": 0, "neg": 0}),
+                    "directionality": self.joint_dir_counts.get(
+                        name, {"pos": 0, "neg": 0}
+                    ),
                 }
                 for name in self.joint_energy_Wh.keys()
             },
             "energy_per_effector": {
                 "ee_main": {
                     "Wh": self.effector_energy_Wh["ee_main"],
-                    "Wh_per_unit": self.effector_energy_Wh["ee_main"] / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                    "Wh_per_hour": self.effector_energy_Wh["ee_main"] / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                    "Wh_per_unit": self.effector_energy_Wh["ee_main"]
+                    / max(self.completed, 1e-6)
+                    if self.completed > 0
+                    else 0.0,
+                    "Wh_per_hour": self.effector_energy_Wh["ee_main"]
+                    / max(self.t / 3600.0, 1e-6)
+                    if self.t > 0
+                    else 0.0,
                 }
             },
             "coordination_metrics": {

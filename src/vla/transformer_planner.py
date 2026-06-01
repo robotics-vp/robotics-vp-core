@@ -8,25 +8,35 @@ SIMA-style "L" head for hierarchical planning.
 
 import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Optional
-
-try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
+from typing import Any, List, Optional
 
 from src.hrl.skills import SkillID, SkillParams
+
+_torch: Any
+_torch_nn: Any
+_torch_F: Any
+try:
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _torch_F
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    _torch = None
+    _torch_nn = None
+    _torch_F = None
+    TORCH_AVAILABLE = False
+
+torch = _torch
+nn = _torch_nn
+F = _torch_F
+_NN_MODULE: Any = nn.Module if TORCH_AVAILABLE else object
 
 
 @dataclass
 class VLAInput:
     """Input to VLA transformer."""
+
     instruction: str
     z_v: Optional[np.ndarray] = None  # (z_v_dim,) visual latent
     state: Optional[np.ndarray] = None  # (obs_dim,) optional state
@@ -37,6 +47,7 @@ class VLAInput:
 @dataclass
 class VLAPlan:
     """Output from VLA transformer."""
+
     skill_sequence: List[int] = field(default_factory=list)
     skill_params: List[np.ndarray] = field(default_factory=list)
     timing_horizons: List[int] = field(default_factory=list)
@@ -46,22 +57,22 @@ class VLAPlan:
     def to_dict(self):
         """Convert to dictionary."""
         return {
-            'skill_sequence': self.skill_sequence,
-            'skill_params': [p.tolist() for p in self.skill_params],
-            'timing_horizons': self.timing_horizons,
-            'confidence': self.confidence,
-            'instruction': self.instruction,
+            "skill_sequence": self.skill_sequence,
+            "skill_params": [p.tolist() for p in self.skill_params],
+            "timing_horizons": self.timing_horizons,
+            "confidence": self.confidence,
+            "instruction": self.instruction,
         }
 
     @classmethod
     def from_dict(cls, d):
         """Create from dictionary."""
         return cls(
-            skill_sequence=d['skill_sequence'],
-            skill_params=[np.array(p) for p in d['skill_params']],
-            timing_horizons=d['timing_horizons'],
-            confidence=d['confidence'],
-            instruction=d.get('instruction', ''),
+            skill_sequence=d["skill_sequence"],
+            skill_params=[np.array(p) for p in d["skill_params"]],
+            timing_horizons=d["timing_horizons"],
+            confidence=d["confidence"],
+            instruction=d.get("instruction", ""),
         )
 
     def __str__(self):
@@ -78,16 +89,40 @@ class SimpleTokenizer:
 
     def __init__(self, vocab_size=1000):
         self.vocab_size = vocab_size
-        self.word_to_id = {'<PAD>': 0, '<UNK>': 1, '<START>': 2, '<END>': 3}
-        self.id_to_word = {0: '<PAD>', 1: '<UNK>', 2: '<START>', 3: '<END>'}
+        self.word_to_id = {"<PAD>": 0, "<UNK>": 1, "<START>": 2, "<END>": 3}
+        self.id_to_word = {0: "<PAD>", 1: "<UNK>", 2: "<START>", 3: "<END>"}
         self.next_id = 4
 
         # Pre-populate with common words
         common_words = [
-            'open', 'close', 'the', 'drawer', 'vase', 'without', 'hitting',
-            'carefully', 'avoid', 'fragile', 'top', 'bottom', 'left', 'right',
-            'grasp', 'pull', 'push', 'handle', 'slowly', 'quickly', 'safe',
-            'while', 'maintaining', 'clearance', 'from', 'and', 'to', 'a'
+            "open",
+            "close",
+            "the",
+            "drawer",
+            "vase",
+            "without",
+            "hitting",
+            "carefully",
+            "avoid",
+            "fragile",
+            "top",
+            "bottom",
+            "left",
+            "right",
+            "grasp",
+            "pull",
+            "push",
+            "handle",
+            "slowly",
+            "quickly",
+            "safe",
+            "while",
+            "maintaining",
+            "clearance",
+            "from",
+            "and",
+            "to",
+            "a",
         ]
         for word in common_words:
             self._add_word(word)
@@ -117,14 +152,14 @@ class SimpleTokenizer:
             self._add_word(word)
 
         # Convert to IDs
-        ids = [self.word_to_id.get('<START>')]
-        for word in words[:max_length - 2]:
-            ids.append(self.word_to_id.get(word, self.word_to_id['<UNK>']))
-        ids.append(self.word_to_id.get('<END>'))
+        ids = [self.word_to_id.get("<START>")]
+        for word in words[: max_length - 2]:
+            ids.append(self.word_to_id.get(word, self.word_to_id["<UNK>"]))
+        ids.append(self.word_to_id.get("<END>"))
 
         # Pad to max_length
         while len(ids) < max_length:
-            ids.append(self.word_to_id['<PAD>'])
+            ids.append(self.word_to_id["<PAD>"])
 
         return ids[:max_length]
 
@@ -140,13 +175,13 @@ class SimpleTokenizer:
         """
         words = []
         for tid in token_ids:
-            word = self.id_to_word.get(tid, '<UNK>')
-            if word not in ['<PAD>', '<START>', '<END>']:
+            word = self.id_to_word.get(tid, "<UNK>")
+            if word not in ["<PAD>", "<START>", "<END>"]:
                 words.append(word)
-        return ' '.join(words)
+        return " ".join(words)
 
 
-class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
+class VLATransformerPlanner(_NN_MODULE):
     """
     Vision-Language-Action Transformer.
 
@@ -170,7 +205,7 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
         obs_dim=13,
         num_skills=6,
         max_plan_length=10,
-        map_dim=256  # 16x16 flattened
+        map_dim=256,  # 16x16 flattened
     ):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for VLATransformerPlanner")
@@ -202,12 +237,9 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             nhead=num_heads,
             dim_feedforward=embed_dim * 4,
             batch_first=True,
-            norm_first=True
+            norm_first=True,
         )
-        self.transformer = nn.TransformerEncoder(
-            encoder_layer,
-            num_layers=num_layers
-        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         # Skill sequence decoder
         # Autoregressive: each position predicts next skill
@@ -220,12 +252,9 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             nhead=num_heads,
             dim_feedforward=embed_dim * 4,
             batch_first=True,
-            norm_first=True
+            norm_first=True,
         )
-        self.decoder = nn.TransformerDecoder(
-            decoder_layer,
-            num_layers=2
-        )
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=2)
 
         # Output heads
         self.skill_head = nn.Linear(embed_dim, num_skills + 1)  # +1 for EOS
@@ -252,7 +281,7 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
         pos_ids = torch.arange(seq_len, device=device).unsqueeze(0)
 
         text_emb = self.text_embedding(token_ids)  # (batch, seq_len, embed_dim)
-        pos_emb = self.pos_embedding(pos_ids)      # (1, seq_len, embed_dim)
+        pos_emb = self.pos_embedding(pos_ids)  # (1, seq_len, embed_dim)
 
         return text_emb + pos_emb
 
@@ -304,7 +333,9 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
         vision_tokens = torch.cat(tokens, dim=1)  # (batch, num_tokens, embed_dim)
         return vision_tokens
 
-    def forward(self, token_ids, z_v=None, state=None, risk_map=None, affordance_map=None):
+    def forward(
+        self, token_ids, z_v=None, state=None, risk_map=None, affordance_map=None
+    ):
         """
         Generate skill plan.
 
@@ -322,10 +353,11 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             confidence: (batch, max_plan_length)
         """
         batch_size = token_ids.shape[0]
-        device = token_ids.device
 
         # Encode text
-        text_features = self.encode_instruction(token_ids)  # (batch, seq_len, embed_dim)
+        text_features = self.encode_instruction(
+            token_ids
+        )  # (batch, seq_len, embed_dim)
 
         # Encode vision
         vision_tokens = self.encode_vision(z_v, state, risk_map, affordance_map)
@@ -358,7 +390,9 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             skill_logit = self.skill_head(last_output)  # (batch, num_skills+1)
             params = torch.sigmoid(self.param_head(last_output))  # (batch, 5)
             timing = F.relu(self.timing_head(last_output)).squeeze(-1) * 100  # (batch,)
-            conf = torch.sigmoid(self.confidence_head(last_output)).squeeze(-1)  # (batch,)
+            conf = torch.sigmoid(self.confidence_head(last_output)).squeeze(
+                -1
+            )  # (batch,)
 
             all_skill_logits.append(skill_logit)
             all_params.append(params)
@@ -367,18 +401,22 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
 
             # Prepare next decoder input (teacher forcing with predicted skill)
             predicted_skill = skill_logit.argmax(dim=-1)  # (batch,)
-            skill_emb = self.skill_embedding(predicted_skill).unsqueeze(1)  # (batch, 1, embed_dim)
+            skill_emb = self.skill_embedding(predicted_skill).unsqueeze(
+                1
+            )  # (batch, 1, embed_dim)
             decoder_input = torch.cat([decoder_input, skill_emb], dim=1)
 
         # Stack outputs
-        skill_logits = torch.stack(all_skill_logits, dim=1)  # (batch, max_plan_length, num_skills+1)
+        skill_logits = torch.stack(
+            all_skill_logits, dim=1
+        )  # (batch, max_plan_length, num_skills+1)
         skill_params = torch.stack(all_params, dim=1)  # (batch, max_plan_length, 5)
         timing = torch.stack(all_timing, dim=1)  # (batch, max_plan_length)
         confidence = torch.stack(all_confidence, dim=1)  # (batch, max_plan_length)
 
         return skill_logits, skill_params, timing, confidence
 
-    def plan(self, vla_input: VLAInput, device='cpu'):
+    def plan(self, vla_input: VLAInput, device="cpu"):
         """
         Generate plan from VLAInput.
 
@@ -409,7 +447,9 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             risk_map = torch.FloatTensor(vla_input.risk_map).unsqueeze(0).to(device)
 
         if vla_input.affordance_map is not None:
-            affordance_map = torch.FloatTensor(vla_input.affordance_map).unsqueeze(0).to(device)
+            affordance_map = (
+                torch.FloatTensor(vla_input.affordance_map).unsqueeze(0).to(device)
+            )
 
         # Generate plan
         self.eval()
@@ -440,13 +480,21 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             skill_params=param_list,
             timing_horizons=timing_list,
             confidence=conf_list,
-            instruction=vla_input.instruction
+            instruction=vla_input.instruction,
         )
 
         return plan
 
-    def compute_loss(self, token_ids, gt_skill_sequence, gt_params=None,
-                     z_v=None, state=None, risk_map=None, affordance_map=None):
+    def compute_loss(
+        self,
+        token_ids,
+        gt_skill_sequence,
+        gt_params=None,
+        z_v=None,
+        state=None,
+        risk_map=None,
+        affordance_map=None,
+    ):
         """
         Compute training loss.
 
@@ -473,54 +521,58 @@ class VLATransformerPlanner(nn.Module if TORCH_AVAILABLE else object):
             (batch_size, self.max_plan_length),
             self.eos_id,
             device=token_ids.device,
-            dtype=torch.long
+            dtype=torch.long,
         )
         gt_padded[:, :plan_len] = gt_skill_sequence
 
         # Cross-entropy loss
         skill_loss = F.cross_entropy(
-            skill_logits.view(-1, self.num_skills + 1),
-            gt_padded.view(-1)
+            skill_logits.view(-1, self.num_skills + 1), gt_padded.view(-1)
         )
 
-        metrics = {'skill_loss': skill_loss.item()}
+        metrics = {"skill_loss": skill_loss.item()}
         total_loss = skill_loss
 
         # Parameter loss (if provided)
         if gt_params is not None:
             # Only compute for non-EOS positions
             param_loss = F.mse_loss(pred_params[:, :plan_len], gt_params)
-            metrics['param_loss'] = param_loss.item()
+            metrics["param_loss"] = param_loss.item()
             total_loss = total_loss + param_loss * 0.1
 
-        metrics['total_loss'] = total_loss.item()
+        metrics["total_loss"] = total_loss.item()
 
         return total_loss, metrics
 
     def save(self, path):
         """Save model checkpoint."""
-        torch.save({
-            'model_state_dict': self.state_dict(),
-            'vocab_size': self.vocab_size,
-            'embed_dim': self.embed_dim,
-            'num_skills': self.num_skills,
-            'max_plan_length': self.max_plan_length,
-            'tokenizer_word_to_id': self.tokenizer.word_to_id,
-        }, path)
+        torch.save(
+            {
+                "model_state_dict": self.state_dict(),
+                "vocab_size": self.vocab_size,
+                "embed_dim": self.embed_dim,
+                "num_skills": self.num_skills,
+                "max_plan_length": self.max_plan_length,
+                "tokenizer_word_to_id": self.tokenizer.word_to_id,
+            },
+            path,
+        )
 
     @classmethod
-    def load(cls, path, device='cpu'):
+    def load(cls, path, device="cpu"):
         """Load model checkpoint."""
         checkpoint = torch.load(path, map_location=device)
         model = cls(
-            vocab_size=checkpoint['vocab_size'],
-            embed_dim=checkpoint['embed_dim'],
-            num_skills=checkpoint['num_skills'],
-            max_plan_length=checkpoint['max_plan_length']
+            vocab_size=checkpoint["vocab_size"],
+            embed_dim=checkpoint["embed_dim"],
+            num_skills=checkpoint["num_skills"],
+            max_plan_length=checkpoint["max_plan_length"],
         )
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.tokenizer.word_to_id = checkpoint['tokenizer_word_to_id']
-        model.tokenizer.id_to_word = {v: k for k, v in checkpoint['tokenizer_word_to_id'].items()}
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.tokenizer.word_to_id = checkpoint["tokenizer_word_to_id"]
+        model.tokenizer.id_to_word = {
+            v: k for k, v in checkpoint["tokenizer_word_to_id"].items()
+        }
         model.to(device)
         return model
 
@@ -561,17 +613,17 @@ class RuleBasedVLAPlanner:
         confidence = []
 
         # Default: standard drawer+vase task
-        if 'drawer' in instruction:
+        if "drawer" in instruction:
             # Check for safety modifiers
-            if 'carefully' in instruction or 'safe' in instruction:
+            if "carefully" in instruction or "safe" in instruction:
                 clearance = 0.2  # Larger clearance
             else:
                 clearance = 0.15
 
             # Check for speed modifiers
-            if 'quickly' in instruction or 'fast' in instruction:
+            if "quickly" in instruction or "fast" in instruction:
                 speed = 0.9
-            elif 'slowly' in instruction:
+            elif "slowly" in instruction:
                 speed = 0.4
             else:
                 speed = 0.6
@@ -598,5 +650,5 @@ class RuleBasedVLAPlanner:
             skill_params=skill_params,
             timing_horizons=timing,
             confidence=confidence,
-            instruction=vla_input.instruction
+            instruction=vla_input.instruction,
         )

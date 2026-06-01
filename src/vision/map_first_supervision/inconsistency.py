@@ -1,8 +1,8 @@
 """Inconsistency and dynamic evidence computation."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -46,8 +46,10 @@ def compute_inconsistency(
 ) -> InconsistencyOutput:
     """Compute per-entity inconsistency residuals and dynamic evidence."""
     if config.residual_method != "voxel_centroid":
-        raise NotImplementedError(f"Residual method '{config.residual_method}' is not implemented")
-    poses_t = scene_tracks.poses_t
+        raise NotImplementedError(
+            f"Residual method '{config.residual_method}' is not implemented"
+        )
+    poses_t = np.asarray(getattr(scene_tracks, "poses_t"))
     T, K = poses_t.shape[:2]
     residual_mean = np.full((T, K), np.nan, dtype=np.float32)
     coverage = np.zeros((T, K), dtype=np.float32)
@@ -89,7 +91,9 @@ def compute_inconsistency(
     confidence = (visibility_weight * coverage).astype(np.float32)
 
     valid_mask = np.isfinite(dynamic_evidence) & (coverage > 0)
-    dynamic_mask = (dynamic_evidence > config.dynamic_threshold) & valid_mask & (~occluded)
+    dynamic_mask = (
+        (dynamic_evidence > config.dynamic_threshold) & valid_mask & (~occluded)
+    )
 
     return InconsistencyOutput(
         residual_mean=residual_mean,

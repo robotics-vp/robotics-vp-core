@@ -1,10 +1,11 @@
 """
 Dataset builder for vision frames/latents from ontology episodes.
 """
+
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 
@@ -14,7 +15,9 @@ from src.vision.config import load_vision_config
 from src.vision.interfaces import VisionFrame, compute_state_digest
 
 
-def _deterministic_frame_array(width: int, height: int, channels: int, episode_id: str, timestep: int, dtype: str):
+def _deterministic_frame_array(
+    width: int, height: int, channels: int, episode_id: str, timestep: int, dtype: str
+):
     digest = hashlib.sha256(f"{episode_id}|{timestep}".encode("utf-8")).hexdigest()
     fill_val = int(digest[:2], 16)  # 0-255
     if dtype.startswith("float"):
@@ -38,7 +41,9 @@ def build_frame_dataset_from_ontology(
     width, height = cfg.get("input_resolution", [224, 224])
     channels = int(cfg.get("channels", 3))
     dtype = str(cfg.get("dtype", "uint8"))
-    encoder = VisionBackboneStub(model_name=cfg.get("model_name"), latent_dim=cfg.get("latent_dim"))
+    encoder = VisionBackboneStub(
+        model_name=cfg.get("model_name"), latent_dim=cfg.get("latent_dim")
+    )
 
     out_dir = Path(output_dir)
     frames_dir = out_dir / "frames"
@@ -68,18 +73,30 @@ def build_frame_dataset_from_ontology(
                         "fov_deg": float(cfg.get("fov_deg", 90.0)),
                         "principal_point": [width / 2.0, height / 2.0],
                     },
-                    camera_extrinsics={"frame": "world", "translation": [0.0, 0.0, 1.0], "rotation_rpy": [0.0, 0.0, 0.0]},
+                    camera_extrinsics={
+                        "frame": "world",
+                        "translation": [0.0, 0.0, 1.0],
+                        "rotation_rpy": [0.0, 0.0, 0.0],
+                    },
                     rgb_path=str(frames_dir / f"frame_{count:06d}.npy"),
                     state_digest=compute_state_digest(ev.state_summary),
                     metadata={
-                        "event_digest": hashlib.sha256(json.dumps(ev.state_summary, sort_keys=True, default=str).encode("utf-8")).hexdigest(),
+                        "event_digest": hashlib.sha256(
+                            json.dumps(
+                                ev.state_summary, sort_keys=True, default=str
+                            ).encode("utf-8")
+                        ).hexdigest(),
                         "state_summary": ev.state_summary,
                     },
                 )
-                array = _deterministic_frame_array(int(width), int(height), channels, ep.episode_id, ev.timestep, dtype)
+                array = _deterministic_frame_array(
+                    int(width), int(height), channels, ep.episode_id, ev.timestep, dtype
+                )
                 rgb_path = frame.rgb_path
                 if rgb_path is None:
-                    raise ValueError("VisionFrame.rgb_path must be set for dataset_builder outputs")
+                    raise ValueError(
+                        "VisionFrame.rgb_path must be set for dataset_builder outputs"
+                    )
                 np.save(rgb_path, array)
                 latent = encoder.encode_frame(frame)
                 mf.write(

@@ -3,11 +3,11 @@ RECAP inference utilities: load trained heads, score ontology episodes.
 
 Deterministic, JSON-safe, and read-only; does not alter rewards or policies.
 """
+
 from dataclasses import dataclass, asdict, field
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
-from torch import nn
 
 from src.vla.recap_heads import (
     AdvantageConditioningConfig,
@@ -41,7 +41,7 @@ class RecapEpisodeScores:
 
 def _build_feature_records(
     events: List[EpisodeEvent],
-    econ: EconVector,
+    econ: Optional[EconVector],
     metadata: Optional[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     md = metadata or {}
@@ -85,7 +85,12 @@ def _scores_from_logits(
         # Expected value for goodness score
         support = value_supports.get(metric, (0.0, 1.0))
         lin = torch.linspace(support[0], support[1], steps=num_atoms)
-        expected = float((value_probs[:, mi, :] * lin.to(value_probs.device)).sum(dim=1).mean().item())
+        expected = float(
+            (value_probs[:, mi, :] * lin.to(value_probs.device))
+            .sum(dim=1)
+            .mean()
+            .item()
+        )
         if metric.lower().startswith("mpl"):
             recap_score += expected
         elif "energy" in metric.lower():
@@ -114,18 +119,39 @@ def load_recap_heads(checkpoint_path: str, device: str = "cpu") -> RecapHeadsBun
     metrics: List[str] = ckpt["metrics"]
     num_atoms: int = ckpt["num_atoms"]
     categories: Dict[str, List[str]] = ckpt.get("categories", {})
-    value_supports: Dict[str, Tuple[float, float]] = ckpt.get("value_supports", {m: (0.0, 1.0) for m in metrics})
-    feature_config = RecapFeatureConfig(metrics=metrics, categories=categories, value_supports=value_supports, num_atoms=num_atoms)
+    value_supports: Dict[str, Tuple[float, float]] = ckpt.get(
+        "value_supports", {m: (0.0, 1.0) for m in metrics}
+    )
+    feature_config = RecapFeatureConfig(
+        metrics=metrics,
+        categories=categories,
+        value_supports=value_supports,
+        num_atoms=num_atoms,
+    )
     adv_config = AdvantageConditioningConfig(advantage_bins=advantage_bins)
-    val_config = DistributionalValueConfig(metrics=metrics, num_atoms=num_atoms, value_supports=value_supports)
+    val_config = DistributionalValueConfig(
+        metrics=metrics, num_atoms=num_atoms, value_supports=value_supports
+    )
     hidden_dim = int(ckpt.get("hidden_dim", 64))
     feature_dim = ckpt.get("feature_dim", feature_config.feature_dim())
-    adv_head = AdvantageConditioningHead(adv_config, input_dim=feature_dim, hidden_dim=hidden_dim).to(device)
-    val_head = DistributionalValueHead(val_config, input_dim=feature_dim, hidden_dim=hidden_dim).to(device)
+    adv_head = AdvantageConditioningHead(
+        adv_config, input_dim=feature_dim, hidden_dim=hidden_dim
+    ).to(device)
+    val_head = DistributionalValueHead(
+        val_config, input_dim=feature_dim, hidden_dim=hidden_dim
+    ).to(device)
 
     state = ckpt["model_state_dict"] if "model_state_dict" in ckpt else {}
-    adv_state = {k.replace("adv_head.", ""): v for k, v in state.items() if k.startswith("adv_head.")}
-    val_state = {k.replace("value_head.", ""): v for k, v in state.items() if k.startswith("value_head.")}
+    adv_state = {
+        k.replace("adv_head.", ""): v
+        for k, v in state.items()
+        if k.startswith("adv_head.")
+    }
+    val_state = {
+        k.replace("value_head.", ""): v
+        for k, v in state.items()
+        if k.startswith("value_head.")
+    }
     if adv_state:
         adv_head.load_state_dict(adv_state, strict=False)
     if val_state:
@@ -153,14 +179,26 @@ def compute_recap_scores(
         raise ValueError("No events provided for RECAP scoring.")
     records = _build_feature_records(events, econ, metadata)
     metric_stats = compute_metric_stats(records, bundle.feature_config.metrics)
-    features = [build_feature_vector(r, bundle.feature_config.metrics, metric_stats, bundle.feature_config.categories) for r in records]
+    features = [
+        build_feature_vector(
+            r,
+            bundle.feature_config.metrics,
+            metric_stats,
+            bundle.feature_config.categories,
+        )
+        for r in records
+    ]
 
     device = bundle.device()
     feats_tensor = torch.tensor(features, dtype=torch.float32, device=device)
     adv_logits = bundle.adv_head(feats_tensor)
     value_logits = bundle.value_head(feats_tensor)
     adv_mean, adv_max, metric_dists, recap_score = _scores_from_logits(
-        adv_logits, value_logits, bundle.metrics, bundle.num_atoms, bundle.feature_config.value_supports
+        adv_logits,
+        value_logits,
+        bundle.metrics,
+        bundle.num_atoms,
+        bundle.feature_config.value_supports,
     )
     return RecapEpisodeScores(
         episode_id=events[0].episode_id,

@@ -3,9 +3,10 @@ TrajectoryAuditV1 integration for dishwashing environment.
 
 Phase 3: Makes TrajectoryAuditV1 unavoidable in training entrypoints.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -72,7 +73,7 @@ class DishwashingTrajectoryCollector:
         elif isinstance(action, (list, tuple)):
             action_list = list(action)
         elif np.isscalar(action):
-            action_list = [float(action), 0.5]  # Default care
+            action_list = [float(np.asarray(action).item()), 0.5]  # Default care
         else:
             action_list = [0.5, 0.5]
         self._actions.append(action_list)
@@ -88,12 +89,16 @@ class DishwashingTrajectoryCollector:
                 for key, val in rb.to_dict().items():
                     if key not in self._reward_components:
                         self._reward_components[key] = []
-                    self._reward_components[key].append(float(val) if val is not None else 0.0)
+                    self._reward_components[key].append(
+                        float(val) if val is not None else 0.0
+                    )
             elif isinstance(rb, dict):
                 for key, val in rb.items():
                     if key not in self._reward_components:
                         self._reward_components[key] = []
-                    self._reward_components[key].append(float(val) if val is not None else 0.0)
+                    self._reward_components[key].append(
+                        float(val) if val is not None else 0.0
+                    )
 
         # Extract metrics from info
         step_errors = info.get("delta_errors", 0)
@@ -147,7 +152,9 @@ class DishwashingTrajectoryCollector:
             num_steps=len(self._actions),
             actions=self._actions,
             rewards=self._rewards,
-            reward_components=self._reward_components if self._reward_components else None,
+            reward_components=self._reward_components
+            if self._reward_components
+            else None,
             events=self._events if self._events else None,
         )
 
@@ -155,6 +162,7 @@ class DishwashingTrajectoryCollector:
     def event_counts(self) -> Dict[str, int]:
         """Get event counts for inspection."""
         from collections import Counter
+
         return dict(Counter(self._events))
 
     @property

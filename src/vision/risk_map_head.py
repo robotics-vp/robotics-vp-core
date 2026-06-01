@@ -4,21 +4,32 @@ Risk Map Head for Vision-Based HRL.
 Predicts per-pixel fragility/collision risk probability.
 """
 
+from typing import Any
+
 import numpy as np
 
+_torch: Any
+_torch_nn: Any
+_torch_F: Any
 try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _torch_F
+
     TORCH_AVAILABLE = True
 except ImportError:
+    _torch = None
+    _torch_nn = None
+    _torch_F = None
     TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
+
+torch = _torch
+nn = _torch_nn
+F = _torch_F
+_NN_MODULE: Any = nn.Module if TORCH_AVAILABLE else object
 
 
-class RiskMapHead(nn.Module if TORCH_AVAILABLE else object):
+class RiskMapHead(_NN_MODULE):
     """
     Predicts per-pixel collision/fragility risk.
 
@@ -31,12 +42,7 @@ class RiskMapHead(nn.Module if TORCH_AVAILABLE else object):
     - Areas of high uncertainty
     """
 
-    def __init__(
-        self,
-        in_channels=128,
-        hidden_channels=64,
-        out_size=(16, 16)
-    ):
+    def __init__(self, in_channels=128, hidden_channels=64, out_size=(16, 16)):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for RiskMapHead")
 
@@ -57,7 +63,7 @@ class RiskMapHead(nn.Module if TORCH_AVAILABLE else object):
         )
 
         # Adaptive upsampling to target size
-        self.upsample = nn.Upsample(size=out_size, mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(size=out_size, mode="bilinear", align_corners=False)
 
     def forward(self, features):
         """
@@ -70,8 +76,8 @@ class RiskMapHead(nn.Module if TORCH_AVAILABLE else object):
             risk_map: (batch, out_H, out_W) in [0, 1]
         """
         x = self.conv(features)  # (batch, 1, H, W)
-        x = self.upsample(x)      # (batch, 1, out_H, out_W)
-        return x.squeeze(1)       # (batch, out_H, out_W)
+        x = self.upsample(x)  # (batch, 1, out_H, out_W)
+        return x.squeeze(1)  # (batch, out_H, out_W)
 
     def compute_loss(self, pred_risk_map, gt_risk_map, collision_mask=None):
         """
@@ -92,7 +98,7 @@ class RiskMapHead(nn.Module if TORCH_AVAILABLE else object):
         if collision_mask is not None:
             # Higher weight for actual collision regions
             weighted_loss = (collision_mask * 10.0 + 1.0) * F.binary_cross_entropy(
-                pred_risk_map, gt_risk_map, reduction='none'
+                pred_risk_map, gt_risk_map, reduction="none"
             )
             bce_loss = weighted_loss.mean()
 
@@ -110,7 +116,7 @@ class RiskMapGenerator:
         self,
         image_size=(128, 128),
         risk_radius=0.15,  # meters
-        max_risk=1.0
+        max_risk=1.0,
     ):
         self.image_size = image_size
         self.risk_radius = risk_radius
@@ -152,7 +158,7 @@ class RiskMapGenerator:
                 if 0 <= x < W and 0 <= y < H:
                     dist = np.sqrt(dx**2 + dy**2)
                     # Gaussian falloff
-                    risk = np.exp(-dist**2 / (2 * radius_pixels**2))
+                    risk = np.exp(-(dist**2) / (2 * radius_pixels**2))
                     risk_map[y, x] = max(risk_map[y, x], risk * self.max_risk)
 
         return risk_map
@@ -189,7 +195,7 @@ class RiskMapGenerator:
 
                     if 0 <= x < W and 0 <= y < H:
                         dist = np.sqrt(dx**2 + dy**2)
-                        risk = np.exp(-dist**2 / (2 * (radius/2)**2))
+                        risk = np.exp(-(dist**2) / (2 * (radius / 2) ** 2))
                         risk_map[y, x] = max(risk_map[y, x], risk)
 
         return risk_map
@@ -229,7 +235,9 @@ class RiskMapGenerator:
 
                     if 0 <= x < W and 0 <= y < H:
                         dist = np.sqrt(dx**2 + dy**2)
-                        risk = np.exp(-dist**2 / (2 * (radius/2)**2)) * risk_factor
+                        risk = (
+                            np.exp(-(dist**2) / (2 * (radius / 2) ** 2)) * risk_factor
+                        )
                         risk_map[y, x] = max(risk_map[y, x], risk)
 
         return risk_map

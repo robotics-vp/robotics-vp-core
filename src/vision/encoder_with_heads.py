@@ -4,26 +4,35 @@ Vision Encoder with Multiple Heads.
 Combines CNN encoder with risk, affordance, no-go, and fragility heads.
 """
 
-import numpy as np
+from typing import Any
 
+from .affordance_head import AffordanceHead
+from .fragility_prior_head import FragilityPriorHead
+from .no_go_head import NoGoZoneHead
+from .risk_map_head import RiskMapHead
+
+_torch: Any
+_torch_nn: Any
+_torch_F: Any
 try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _torch_F
+
     TORCH_AVAILABLE = True
 except ImportError:
+    _torch = None
+    _torch_nn = None
+    _torch_F = None
     TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
 
-from .risk_map_head import RiskMapHead
-from .affordance_head import AffordanceHead
-from .no_go_head import NoGoZoneHead
-from .fragility_prior_head import FragilityPriorHead
+torch = _torch
+nn = _torch_nn
+F = _torch_F
+_NN_MODULE: Any = nn.Module if TORCH_AVAILABLE else object
 
 
-class SimpleCNNEncoder(nn.Module if TORCH_AVAILABLE else object):
+class SimpleCNNEncoder(_NN_MODULE):
     """
     Simple CNN encoder for image features.
     """
@@ -60,7 +69,7 @@ class SimpleCNNEncoder(nn.Module if TORCH_AVAILABLE else object):
         return self.encoder(x)
 
 
-class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
+class VisionEncoderWithHeads(_NN_MODULE):
     """
     Complete vision encoder with multiple prediction heads.
 
@@ -83,7 +92,7 @@ class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
         use_risk_head=True,
         use_affordance_head=True,
         use_nogo_head=True,
-        use_fragility_head=True
+        use_fragility_head=True,
     ):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required for VisionEncoderWithHeads")
@@ -140,12 +149,14 @@ class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
         features = self.encoder(image)  # (batch, feature_dim, H', W')
 
         # Compute z_V (global latent)
-        pooled = self.global_pool(features).squeeze(-1).squeeze(-1)  # (batch, feature_dim)
+        pooled = (
+            self.global_pool(features).squeeze(-1).squeeze(-1)
+        )  # (batch, feature_dim)
         z_v = self.z_v_projection(pooled)  # (batch, z_v_dim)
 
         outputs = {
-            'z_v': z_v,
-            'features': features,
+            "z_v": z_v,
+            "features": features,
         }
 
         if not return_all:
@@ -153,16 +164,16 @@ class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
 
         # Compute head outputs
         if self.use_risk_head:
-            outputs['risk_map'] = self.risk_head(features)
+            outputs["risk_map"] = self.risk_head(features)
 
         if self.use_affordance_head:
-            outputs['affordance_map'] = self.affordance_head(features)
+            outputs["affordance_map"] = self.affordance_head(features)
 
         if self.use_nogo_head:
-            outputs['nogo_mask'] = self.nogo_head(features)
+            outputs["nogo_mask"] = self.nogo_head(features)
 
         if self.use_fragility_head:
-            outputs['fragility_map'] = self.fragility_head(features)
+            outputs["fragility_map"] = self.fragility_head(features)
 
         return outputs
 
@@ -176,24 +187,24 @@ class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
         Returns:
             safety_map: (batch, H', W') combined safety scores
         """
-        batch_size = outputs['z_v'].shape[0]
-        device = outputs['z_v'].device
+        batch_size = outputs["z_v"].shape[0]
+        device = outputs["z_v"].device
         H, W = self.map_size
 
         # Initialize with ones (safe everywhere)
         safety_map = torch.ones(batch_size, H, W, device=device)
 
         # Reduce safety where risk is high
-        if 'risk_map' in outputs:
-            safety_map = safety_map * (1.0 - outputs['risk_map'])
+        if "risk_map" in outputs:
+            safety_map = safety_map * (1.0 - outputs["risk_map"])
 
         # Zero out no-go zones
-        if 'nogo_mask' in outputs:
-            safety_map = safety_map * (1.0 - outputs['nogo_mask'])
+        if "nogo_mask" in outputs:
+            safety_map = safety_map * (1.0 - outputs["nogo_mask"])
 
         # Reduce safety in fragile regions
-        if 'fragility_map' in outputs:
-            safety_map = safety_map * (1.0 - outputs['fragility_map'] * 0.5)
+        if "fragility_map" in outputs:
+            safety_map = safety_map * (1.0 - outputs["fragility_map"] * 0.5)
 
         return safety_map
 
@@ -215,7 +226,9 @@ class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
         # For simplicity, use center of image as current position
         batch_size = safety_map.shape[0]
         H, W = self.map_size
-        center = torch.tensor([H // 2, W // 2], device=safety_map.device, dtype=torch.float)
+        center = torch.tensor(
+            [H // 2, W // 2], device=safety_map.device, dtype=torch.float
+        )
 
         # Sample points along direction
         num_samples = 10
@@ -256,41 +269,44 @@ class VisionEncoderWithHeads(nn.Module if TORCH_AVAILABLE else object):
         """
         outputs = self.forward(image, return_all=True)
 
-        z_v = outputs['z_v']
-        risk_map = outputs.get('risk_map', None)
-        affordance_map = outputs.get('affordance_map', None)
-        nogo_mask = outputs.get('nogo_mask', None)
-        fragility_map = outputs.get('fragility_map', None)
+        z_v = outputs["z_v"]
+        risk_map = outputs.get("risk_map", None)
+        affordance_map = outputs.get("affordance_map", None)
+        nogo_mask = outputs.get("nogo_mask", None)
+        fragility_map = outputs.get("fragility_map", None)
 
         return z_v, risk_map, affordance_map, nogo_mask, fragility_map
 
     def save(self, path):
         """Save model checkpoint."""
-        torch.save({
-            'model_state_dict': self.state_dict(),
-            'feature_dim': self.feature_dim,
-            'z_v_dim': self.z_v_dim,
-            'map_size': self.map_size,
-            'use_risk_head': self.use_risk_head,
-            'use_affordance_head': self.use_affordance_head,
-            'use_nogo_head': self.use_nogo_head,
-            'use_fragility_head': self.use_fragility_head,
-        }, path)
+        torch.save(
+            {
+                "model_state_dict": self.state_dict(),
+                "feature_dim": self.feature_dim,
+                "z_v_dim": self.z_v_dim,
+                "map_size": self.map_size,
+                "use_risk_head": self.use_risk_head,
+                "use_affordance_head": self.use_affordance_head,
+                "use_nogo_head": self.use_nogo_head,
+                "use_fragility_head": self.use_fragility_head,
+            },
+            path,
+        )
 
     @classmethod
-    def load(cls, path, device='cpu'):
+    def load(cls, path, device="cpu"):
         """Load model checkpoint."""
         checkpoint = torch.load(path, map_location=device)
         model = cls(
-            feature_dim=checkpoint['feature_dim'],
-            z_v_dim=checkpoint['z_v_dim'],
-            map_size=checkpoint['map_size'],
-            use_risk_head=checkpoint['use_risk_head'],
-            use_affordance_head=checkpoint['use_affordance_head'],
-            use_nogo_head=checkpoint['use_nogo_head'],
-            use_fragility_head=checkpoint['use_fragility_head'],
+            feature_dim=checkpoint["feature_dim"],
+            z_v_dim=checkpoint["z_v_dim"],
+            map_size=checkpoint["map_size"],
+            use_risk_head=checkpoint["use_risk_head"],
+            use_affordance_head=checkpoint["use_affordance_head"],
+            use_nogo_head=checkpoint["use_nogo_head"],
+            use_fragility_head=checkpoint["use_fragility_head"],
         )
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint["model_state_dict"])
         model.to(device)
         return model
 
@@ -300,14 +316,16 @@ class VisionHeadTrainer:
     Training utilities for vision heads.
     """
 
-    def __init__(self, model, lr=1e-4, device='cpu'):
+    def __init__(self, model, lr=1e-4, device="cpu"):
         self.model = model.to(device)
         self.device = device
 
         if TORCH_AVAILABLE:
             self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    def train_step(self, images, gt_risk=None, gt_affordance=None, gt_nogo=None, gt_fragility=None):
+    def train_step(
+        self, images, gt_risk=None, gt_affordance=None, gt_nogo=None, gt_fragility=None
+    ):
         """
         Single training step.
 
@@ -330,33 +348,39 @@ class VisionHeadTrainer:
         total_loss = 0.0
 
         # Risk loss
-        if gt_risk is not None and 'risk_map' in outputs:
-            risk_loss = F.binary_cross_entropy(outputs['risk_map'], gt_risk.to(self.device))
-            losses['risk'] = risk_loss.item()
+        if gt_risk is not None and "risk_map" in outputs:
+            risk_loss = F.binary_cross_entropy(
+                outputs["risk_map"], gt_risk.to(self.device)
+            )
+            losses["risk"] = risk_loss.item()
             total_loss = total_loss + risk_loss
 
         # Affordance loss
-        if gt_affordance is not None and 'affordance_map' in outputs:
-            aff_loss = F.binary_cross_entropy(outputs['affordance_map'], gt_affordance.to(self.device))
-            losses['affordance'] = aff_loss.item()
+        if gt_affordance is not None and "affordance_map" in outputs:
+            aff_loss = F.binary_cross_entropy(
+                outputs["affordance_map"], gt_affordance.to(self.device)
+            )
+            losses["affordance"] = aff_loss.item()
             total_loss = total_loss + aff_loss
 
         # No-go loss
-        if gt_nogo is not None and 'nogo_mask' in outputs:
+        if gt_nogo is not None and "nogo_mask" in outputs:
             nogo_loss = F.binary_cross_entropy(
-                self.model.nogo_head(outputs['features'], return_soft=True),
-                gt_nogo.to(self.device)
+                self.model.nogo_head(outputs["features"], return_soft=True),
+                gt_nogo.to(self.device),
             )
-            losses['nogo'] = nogo_loss.item()
+            losses["nogo"] = nogo_loss.item()
             total_loss = total_loss + nogo_loss
 
         # Fragility loss
-        if gt_fragility is not None and 'fragility_map' in outputs:
-            frag_loss = F.mse_loss(outputs['fragility_map'], gt_fragility.to(self.device))
-            losses['fragility'] = frag_loss.item()
+        if gt_fragility is not None and "fragility_map" in outputs:
+            frag_loss = F.mse_loss(
+                outputs["fragility_map"], gt_fragility.to(self.device)
+            )
+            losses["fragility"] = frag_loss.item()
             total_loss = total_loss + frag_loss
 
-        losses['total'] = total_loss.item()
+        losses["total"] = total_loss.item()
 
         # Backprop
         if isinstance(total_loss, torch.Tensor):
@@ -385,20 +409,20 @@ class VisionHeadTrainer:
         metrics = {}
 
         # Risk map accuracy
-        if gt_risk is not None and 'risk_map' in outputs:
-            pred_risk = outputs['risk_map']
+        if gt_risk is not None and "risk_map" in outputs:
+            pred_risk = outputs["risk_map"]
             # Binary accuracy at 0.5 threshold
             pred_binary = (pred_risk > 0.5).float()
             gt_binary = (gt_risk.to(self.device) > 0.5).float()
             accuracy = (pred_binary == gt_binary).float().mean()
-            metrics['risk_accuracy'] = accuracy.item()
+            metrics["risk_accuracy"] = accuracy.item()
 
         # No-go IoU
-        if gt_nogo is not None and 'nogo_mask' in outputs:
-            pred_nogo = outputs['nogo_mask']
+        if gt_nogo is not None and "nogo_mask" in outputs:
+            pred_nogo = outputs["nogo_mask"]
             intersection = (pred_nogo * gt_nogo.to(self.device)).sum()
             union = pred_nogo.sum() + gt_nogo.to(self.device).sum() - intersection
             iou = (intersection + 1e-6) / (union + 1e-6)
-            metrics['nogo_iou'] = iou.item()
+            metrics["nogo_iou"] = iou.item()
 
         return metrics

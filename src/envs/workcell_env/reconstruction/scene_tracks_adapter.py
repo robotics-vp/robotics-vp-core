@@ -4,12 +4,13 @@ Scene reconstruction adapter for workcell environments.
 Converts SceneTracks_v1 and map_first_supervision artifacts
 into WorkcellSceneSpec for environment replay.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TrackInfo:
     """Information about a tracked object."""
+
     track_id: str
     object_type: str
     positions: np.ndarray  # (T, 3)
@@ -38,6 +40,7 @@ class TrackInfo:
 @dataclass
 class ReconstructionResult:
     """Result of scene reconstruction."""
+
     scene_spec: WorkcellSceneSpec
     track_mapping: Dict[str, str]  # track_id -> spec_id
     confidence_score: float
@@ -99,8 +102,16 @@ class SceneTracksAdapter:
 
         for track in tracks:
             obj_type = self._classify_object(track)
-            initial_pos = tuple(track.positions[0].tolist()) if len(track.positions) > 0 else (0.0, 0.0, 0.0)
-            initial_ori = tuple(track.orientations[0].tolist()) if len(track.orientations) > 0 else (0.0, 0.0, 0.0, 1.0)
+            initial_pos = (
+                tuple(track.positions[0].tolist())
+                if len(track.positions) > 0
+                else (0.0, 0.0, 0.0)
+            )
+            initial_ori = (
+                tuple(track.orientations[0].tolist())
+                if len(track.orientations) > 0
+                else (0.0, 0.0, 0.0, 1.0)
+            )
 
             if obj_type == "fixture":
                 fixture_spec = FixtureSpec(
@@ -144,7 +155,11 @@ class SceneTracksAdapter:
                 track_mapping[track.track_id] = station_spec.id
 
         # Compute spatial bounds from track positions
-        all_positions = np.concatenate([t.positions for t in tracks]) if tracks else np.zeros((1, 3))
+        all_positions = (
+            np.concatenate([t.positions for t in tracks])
+            if tracks
+            else np.zeros((1, 3))
+        )
         bounds = self._compute_bounds(all_positions)
 
         # Build scene spec
@@ -192,20 +207,34 @@ class SceneTracksAdapter:
 
         return self.reconstruct_from_tracks(scene_tracks, map_first_artifacts)
 
-    def _parse_scene_tracks(self, scene_tracks: Dict[str, np.ndarray]) -> List[TrackInfo]:
+    def _parse_scene_tracks(
+        self, scene_tracks: Dict[str, np.ndarray]
+    ) -> List[TrackInfo]:
         """Parse SceneTracks_v1 format into TrackInfo list."""
         tracks: List[TrackInfo] = []
 
         # Try different key conventions
-        track_ids = scene_tracks.get("track_ids", scene_tracks.get("scene_tracks_v1/track_ids"))
-        positions = scene_tracks.get("positions", scene_tracks.get("scene_tracks_v1/positions"))
+        track_ids = scene_tracks.get(
+            "track_ids", scene_tracks.get("scene_tracks_v1/track_ids")
+        )
+        positions = scene_tracks.get(
+            "positions", scene_tracks.get("scene_tracks_v1/positions")
+        )
         if positions is None:
-            positions = scene_tracks.get("poses_t", scene_tracks.get("scene_tracks_v1/poses_t"))
+            positions = scene_tracks.get(
+                "poses_t", scene_tracks.get("scene_tracks_v1/poses_t")
+            )
 
-        orientations = scene_tracks.get("orientations", scene_tracks.get("scene_tracks_v1/orientations"))
+        orientations = scene_tracks.get(
+            "orientations", scene_tracks.get("scene_tracks_v1/orientations")
+        )
         if orientations is None:
-            orientations = scene_tracks.get("poses_R", scene_tracks.get("scene_tracks_v1/poses_R"))
-        labels = scene_tracks.get("semantic_labels", scene_tracks.get("scene_tracks_v1/semantic_labels"))
+            orientations = scene_tracks.get(
+                "poses_R", scene_tracks.get("scene_tracks_v1/poses_R")
+            )
+        labels = scene_tracks.get(
+            "semantic_labels", scene_tracks.get("scene_tracks_v1/semantic_labels")
+        )
 
         if track_ids is None or positions is None:
             return tracks
@@ -242,25 +271,31 @@ class SceneTracksAdapter:
                     if orientations is not None and orientations.ndim >= 3
                     else _default_orientations(len(positions[i]))
                 )
-                tracks.append(TrackInfo(
-                    track_id=str(tid),
-                    object_type="unknown",
-                    positions=positions[i],
-                    orientations=track_orientations,
-                    semantic_labels=labels[i] if labels is not None and labels.ndim >= 2 else None,
-                ))
+                tracks.append(
+                    TrackInfo(
+                        track_id=str(tid),
+                        object_type="unknown",
+                        positions=positions[i],
+                        orientations=track_orientations,
+                        semantic_labels=labels[i]
+                        if labels is not None and labels.ndim >= 2
+                        else None,
+                    )
+                )
         elif positions.ndim == 2:  # (T, 3) single track or (num_tracks, 3) single frame
             single_track_orientations = (
                 np.asarray(orientations, dtype=np.float32)
                 if orientations is not None
                 else _default_orientations(len(positions))
             )
-            tracks.append(TrackInfo(
-                track_id=str(track_ids[0]) if len(track_ids) > 0 else "track_0",
-                object_type="unknown",
-                positions=positions,
-                orientations=single_track_orientations,
-            ))
+            tracks.append(
+                TrackInfo(
+                    track_id=str(track_ids[0]) if len(track_ids) > 0 else "track_0",
+                    object_type="unknown",
+                    positions=positions,
+                    orientations=single_track_orientations,
+                )
+            )
 
         return tracks
 

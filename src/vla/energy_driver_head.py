@@ -4,9 +4,10 @@ Semantic energy driver head for attribution (weakly supervised).
 This is not a physics model; it explains *why* energy was spent in semantic terms
 so datapacks can carry interpretable tags alongside physics energy metrics.
 """
+
 import torch
 import torch.nn as nn
-from typing import List, Dict
+from typing import Dict, List, Optional
 
 
 ENERGY_DRIVERS = [
@@ -19,7 +20,12 @@ ENERGY_DRIVERS = [
 
 
 class EnergyDriverHead(nn.Module):
-    def __init__(self, latent_dim: int, hidden_dim: int = 128, n_drivers: int = len(ENERGY_DRIVERS)):
+    def __init__(
+        self,
+        latent_dim: int,
+        hidden_dim: int = 128,
+        n_drivers: int = len(ENERGY_DRIVERS),
+    ):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
@@ -34,7 +40,9 @@ class EnergyDriverHead(nn.Module):
         return torch.sigmoid(self.net(x))
 
 
-def heuristic_energy_tags(episode_summary: Dict, thresholds: Dict[str, float] | None = None) -> List[str]:
+def heuristic_energy_tags(
+    episode_summary: Dict, thresholds: Optional[Dict[str, float]] = None
+) -> List[str]:
     """
     Weak heuristics mapping physics metrics to semantic driver tags.
     """
@@ -51,7 +59,10 @@ def heuristic_energy_tags(episode_summary: Dict, thresholds: Dict[str, float] | 
         tags.append("long_reach")
     if wrist_frac > thresholds.get("high_friction_frac", 0.4):
         tags.append("high_friction")
-    if energy.get("total_Wh", 0.0) > thresholds.get("cautious_energy", 0.5) and wrist_frac > 0.2:
+    if (
+        energy.get("total_Wh", 0.0) > thresholds.get("cautious_energy", 0.5)
+        and wrist_frac > 0.2
+    ):
         tags.append("cautious_fragility")
 
     return tags

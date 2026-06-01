@@ -11,13 +11,14 @@ Provides small, explicit types used throughout the NAG module:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, NewType, Optional, Tuple, Union
+from typing import Any, Dict, NewType, Optional, Tuple, Union
 
 import numpy as np
 
 try:
     import torch
     from torch import Tensor
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -58,6 +59,7 @@ class CameraParams:
         far: Far clipping plane
         camera_id: Optional identifier for multi-camera setups
     """
+
     fx: float
     fy: float
     cx: float
@@ -93,11 +95,14 @@ class CameraParams:
     @property
     def K(self) -> np.ndarray:
         """3x3 intrinsic matrix."""
-        return np.array([
-            [self.fx, 0, self.cx],
-            [0, self.fy, self.cy],
-            [0, 0, 1],
-        ], dtype=np.float32)
+        return np.array(
+            [
+                [self.fx, 0, self.cx],
+                [0, self.fy, self.cy],
+                [0, 0, 1],
+            ],
+            dtype=np.float32,
+        )
 
     @property
     def K_inv(self) -> np.ndarray:
@@ -146,7 +151,9 @@ class CameraParams:
 
         # Directions: rotate from camera to world
         dirs_world = np.einsum("ij,hwj->hwi", R, dirs_cam)
-        dirs_world = dirs_world / (np.linalg.norm(dirs_world, axis=-1, keepdims=True) + 1e-8)
+        dirs_world = dirs_world / (
+            np.linalg.norm(dirs_world, axis=-1, keepdims=True) + 1e-8
+        )
 
         return origins, dirs_world
 
@@ -183,7 +190,9 @@ class CameraParams:
         alpha = t_scaled - t_floor
 
         # Linear interpolation (could upgrade to SLERP for rotation)
-        pose = (1 - alpha) * self.world_from_cam[t_floor] + alpha * self.world_from_cam[t_ceil]
+        pose = (1 - alpha) * self.world_from_cam[t_floor] + alpha * self.world_from_cam[
+            t_ceil
+        ]
         return pose
 
     @classmethod
@@ -253,10 +262,15 @@ class CameraParams:
         if poses.ndim == 2:
             poses = poses[np.newaxis, ...]
         return cls(
-            fx=fx, fy=fy, cx=cx, cy=cy,
-            height=height, width=width,
+            fx=fx,
+            fy=fy,
+            cx=cx,
+            cy=cy,
+            height=height,
+            width=width,
             world_from_cam=poses,
-            near=near, far=far,
+            near=near,
+            far=far,
             camera_id=camera_id,
         )
 
@@ -277,10 +291,15 @@ class CameraParams:
         cx = width / 2.0
         cy = height / 2.0
         return cls(
-            fx=fx, fy=fy, cx=cx, cy=cy,
-            height=height, width=width,
+            fx=fx,
+            fy=fy,
+            cx=cx,
+            cy=cy,
+            height=height,
+            width=width,
             world_from_cam=world_from_cam,
-            near=near, far=far,
+            near=near,
+            far=far,
             camera_id=camera_id,
         )
 
@@ -382,6 +401,7 @@ class PlaneParams:
         world_from_plane: 4x4 transform from plane-local to world coordinates
         extent: (width, height) of the plane in world units
     """
+
     world_from_plane: np.ndarray  # (4, 4)
     extent: np.ndarray  # (2,) width, height in world units
 
@@ -536,6 +556,7 @@ class PoseSplineParams:
         translations: (K, 3) position at each knot
         euler_angles: (K, 3) Euler angles (roll, pitch, yaw) at each knot
     """
+
     knot_times: np.ndarray  # (K,)
     translations: np.ndarray  # (K, 3)
     euler_angles: np.ndarray  # (K, 3) roll, pitch, yaw
@@ -583,10 +604,14 @@ class PoseSplineParams:
         alpha = np.clip(alpha, 0, 1)
 
         # Interpolate translation
-        trans = (1 - alpha) * self.translations[idx] + alpha * self.translations[idx + 1]
+        trans = (1 - alpha) * self.translations[idx] + alpha * self.translations[
+            idx + 1
+        ]
 
         # Interpolate Euler angles (simple lerp - can use SLERP for quaternions)
-        euler = (1 - alpha) * self.euler_angles[idx] + alpha * self.euler_angles[idx + 1]
+        euler = (1 - alpha) * self.euler_angles[idx] + alpha * self.euler_angles[
+            idx + 1
+        ]
 
         return self._euler_to_matrix(trans, euler)
 
@@ -600,11 +625,14 @@ class PoseSplineParams:
         cy, sy = np.cos(yaw), np.sin(yaw)
 
         # Combined rotation (ZYX order)
-        R = np.array([
-            [cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr],
-            [sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr],
-            [-sp, cp*sr, cp*cr],
-        ], dtype=np.float32)
+        R = np.array(
+            [
+                [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+                [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+                [-sp, cp * sr, cp * cr],
+            ],
+            dtype=np.float32,
+        )
 
         # Build 4x4 transform
         T = np.eye(4, dtype=np.float32)
@@ -689,6 +717,7 @@ class NAGEditVector:
 
     Used for logging and analysis in the economics pipeline.
     """
+
     node_id: NAGNodeId
     edit_type: str  # "texture", "pose", "duplicate", "remove"
     parameters: Dict[str, Any] = field(default_factory=dict)

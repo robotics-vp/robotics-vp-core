@@ -7,7 +7,6 @@ with time-varying pose and view-dependent appearance.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple, cast
 
 import numpy as np
@@ -16,6 +15,7 @@ try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -114,14 +114,10 @@ class NAGPlaneNode(nn.Module):
         )
 
         # Base texture (initialized to gray, will be set from image)
-        self.base_texture = nn.Parameter(
-            torch.ones(3, H, W) * 0.5
-        )
+        self.base_texture = nn.Parameter(torch.ones(3, H, W) * 0.5)
 
         # Base alpha (initialized to opaque)
-        self.base_alpha = nn.Parameter(
-            torch.ones(1, H, W)
-        )
+        self.base_alpha = nn.Parameter(torch.ones(1, H, W))
 
         # Color residual MLP: (u, v, t, view_dir) -> RGB residual
         # Input: 2 (uv) + 1 (t) + 3 (view_dir) = 6
@@ -165,8 +161,12 @@ class NAGPlaneNode(nn.Module):
         euler_angles = cast(torch.Tensor, self.spline_euler_angles)
         return PoseSplineParams(
             knot_times=np.asarray(knot_times.detach().cpu().tolist(), dtype=np.float32),
-            translations=np.asarray(translations.detach().cpu().tolist(), dtype=np.float32),
-            euler_angles=np.asarray(euler_angles.detach().cpu().tolist(), dtype=np.float32),
+            translations=np.asarray(
+                translations.detach().cpu().tolist(), dtype=np.float32
+            ),
+            euler_angles=np.asarray(
+                euler_angles.detach().cpu().tolist(), dtype=np.float32
+            ),
         )
 
     def pose_at(self, t: torch.Tensor) -> torch.Tensor:
@@ -183,7 +183,6 @@ class NAGPlaneNode(nn.Module):
         if is_scalar:
             t = t.unsqueeze(0)
 
-        B = t.shape[0]
         knot_times = cast(torch.Tensor, self.spline_knot_times)
         spline_translations = cast(torch.Tensor, self.spline_translations)
         spline_euler_angles = cast(torch.Tensor, self.spline_euler_angles)
@@ -204,8 +203,12 @@ class NAGPlaneNode(nn.Module):
         alpha = torch.clamp(alpha, 0, 1).unsqueeze(-1)
 
         # Interpolate translation and Euler angles
-        trans = (1 - alpha) * spline_translations[idx] + alpha * spline_translations[idx + 1]
-        euler = (1 - alpha) * spline_euler_angles[idx] + alpha * spline_euler_angles[idx + 1]
+        trans = (1 - alpha) * spline_translations[idx] + alpha * spline_translations[
+            idx + 1
+        ]
+        euler = (1 - alpha) * spline_euler_angles[idx] + alpha * spline_euler_angles[
+            idx + 1
+        ]
 
         # Build rotation matrices
         transforms = self._euler_to_matrix_batch(trans, euler)
@@ -253,7 +256,12 @@ class NAGPlaneNode(nn.Module):
         R[:, 2, 2] = cp * cr
 
         # Build 4x4 transform
-        T = torch.eye(4, device=device, dtype=trans.dtype).unsqueeze(0).expand(B, -1, -1).clone()
+        T = (
+            torch.eye(4, device=device, dtype=trans.dtype)
+            .unsqueeze(0)
+            .expand(B, -1, -1)
+            .clone()
+        )
         T[:, :3, :3] = R
         T[:, :3, 3] = trans
 
@@ -278,7 +286,6 @@ class NAGPlaneNode(nn.Module):
             alpha: (...,) alpha values
         """
         shape = uv.shape[:-1]
-        device = uv.device
 
         # Flatten for processing
         uv_flat = uv.reshape(-1, 2)

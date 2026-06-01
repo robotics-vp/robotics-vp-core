@@ -33,8 +33,8 @@ class MetaDINOBackbone(VisionBackbone):
         self._enabled = enabled
         self._backend_policy = _normalize_backend_policy(backend_policy)
         self._available = False
-        self._model = None
-        self._processor = None
+        self._model: Any = None
+        self._processor: Any = None
         self._fallback: Optional[DummyBackbone] = None
         self._backend_type = ""
         self._backend_selected = "unavailable"

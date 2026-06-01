@@ -4,12 +4,11 @@ Minimal PPO implementation with novelty-weighted loss.
 Integrates diffusion-based novelty signals to weight training samples
 by their informational value for economic data valuation.
 """
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 import numpy as np
-from collections import deque
 
 
 class ActorCritic(nn.Module):
@@ -28,7 +27,7 @@ class ActorCritic(nn.Module):
             nn.Linear(obs_dim, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.Tanh()
+            nn.Tanh(),
         )
 
         # Actor head (policy)
@@ -111,8 +110,8 @@ class PPOAgent:
         entropy_coef=0.01,
         max_grad_norm=0.5,
         novelty_alpha=1.0,  # Weight novelty in sample weighting
-        novelty_beta=0.0,   # Bias term for weighting
-        device='cpu'
+        novelty_beta=0.0,  # Bias term for weighting
+        device="cpu",
     ):
         self.obs_dim = obs_dim
         self.action_dim = action_dim
@@ -141,13 +140,13 @@ class PPOAgent:
     def clear_buffer(self):
         """Clear trajectory buffer."""
         self.buffer = {
-            'obs': [],
-            'actions': [],
-            'rewards': [],
-            'values': [],
-            'logprobs': [],
-            'dones': [],
-            'novelty': []  # For novelty weighting
+            "obs": [],
+            "actions": [],
+            "rewards": [],
+            "values": [],
+            "logprobs": [],
+            "dones": [],
+            "novelty": [],  # For novelty weighting
         }
 
     def select_action(self, obs, novelty=None):
@@ -173,28 +172,31 @@ class PPOAgent:
             action, logprob, value = self.ac.get_action(obs_tensor)
 
         # Store in buffer
-        self.buffer['obs'].append(obs_tensor.cpu())
-        self.buffer['actions'].append(action.cpu())
-        self.buffer['logprobs'].append(logprob.cpu())
-        self.buffer['values'].append(value.cpu())
-        self.buffer['novelty'].append(novelty if novelty is not None else 1.0)
+        self.buffer["obs"].append(obs_tensor.cpu())
+        self.buffer["actions"].append(action.cpu())
+        self.buffer["logprobs"].append(logprob.cpu())
+        self.buffer["values"].append(value.cpu())
+        self.buffer["novelty"].append(novelty if novelty is not None else 1.0)
 
         return action.cpu().numpy()[0], logprob.item(), value.item()
 
     def store_transition(self, reward, done):
         """Store reward and done flag."""
-        self.buffer['rewards'].append(reward)
-        self.buffer['dones'].append(done)
+        self.buffer["rewards"].append(reward)
+        self.buffer["dones"].append(done)
 
     def _obs_to_tensor(self, obs_dict):
         """Convert observation dict to tensor."""
         # Simple feature extraction from dishwashing env
-        features = np.array([
-            obs_dict['t'] / 3600.0,  # Normalize time
-            obs_dict['completed'] / 200.0,  # Normalize completed
-            obs_dict['attempts'] / 300.0,  # Normalize attempts
-            obs_dict['errors'] / 50.0  # Normalize errors
-        ], dtype=np.float32)
+        features = np.array(
+            [
+                obs_dict["t"] / 3600.0,  # Normalize time
+                obs_dict["completed"] / 200.0,  # Normalize completed
+                obs_dict["attempts"] / 300.0,  # Normalize attempts
+                obs_dict["errors"] / 50.0,  # Normalize errors
+            ],
+            dtype=np.float32,
+        )
         return torch.FloatTensor(features).unsqueeze(0).to(self.device)
 
     def compute_advantages(self, last_value=0.0):
@@ -205,9 +207,9 @@ class PPOAgent:
             advantages: [T] tensor
             returns: [T] tensor
         """
-        rewards = torch.FloatTensor(self.buffer['rewards']).to(self.device)
-        values = torch.cat(self.buffer['values']).to(self.device)
-        dones = torch.FloatTensor(self.buffer['dones']).to(self.device)
+        rewards = torch.FloatTensor(self.buffer["rewards"]).to(self.device)
+        values = torch.cat(self.buffer["values"]).to(self.device)
+        dones = torch.FloatTensor(self.buffer["dones"]).to(self.device)
 
         # Append last value for bootstrapping
         last_value_tensor = torch.FloatTensor([[last_value]]).to(self.device)
@@ -252,9 +254,7 @@ class PPOAgent:
         valuations = torch.abs(advantages) * novelty_scores
 
         # Convert to weights via sigmoid
-        weights_raw = torch.sigmoid(
-            self.novelty_alpha * valuations + self.novelty_beta
-        )
+        weights_raw = torch.sigmoid(self.novelty_alpha * valuations + self.novelty_beta)
 
         # Clip to prevent extreme values
         weights = torch.clamp(weights_raw, clip_range[0], clip_range[1])
@@ -264,10 +264,10 @@ class PPOAgent:
 
         # Compute statistics
         weight_stats = {
-            'mean': weights.mean().item(),
-            'p90': weights.quantile(0.9).item(),
-            'min': weights.min().item(),
-            'max': weights.max().item()
+            "mean": weights.mean().item(),
+            "p90": weights.quantile(0.9).item(),
+            "min": weights.min().item(),
+            "max": weights.max().item(),
         }
 
         return weights, valuations, weight_stats
@@ -286,25 +286,27 @@ class PPOAgent:
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Prepare batch data
-        obs = torch.cat(self.buffer['obs']).to(self.device)
-        actions = torch.cat(self.buffer['actions']).to(self.device)
-        old_logprobs = torch.cat(self.buffer['logprobs']).to(self.device)
-        novelty_scores = self.buffer['novelty']
+        obs = torch.cat(self.buffer["obs"]).to(self.device)
+        actions = torch.cat(self.buffer["actions"]).to(self.device)
+        old_logprobs = torch.cat(self.buffer["logprobs"]).to(self.device)
+        novelty_scores = self.buffer["novelty"]
 
         # Compute sample weights (with clipping & normalization)
-        weights, valuations, weight_stats = self.compute_sample_weights(advantages, novelty_scores)
+        weights, valuations, weight_stats = self.compute_sample_weights(
+            advantages, novelty_scores
+        )
 
         # Training metrics
         metrics = {
-            'policy_loss': [],
-            'value_loss': [],
-            'entropy': [],
-            'total_loss': [],
-            'kl_divergence': [],  # Track KL for stability
-            'mean_novelty': torch.tensor(novelty_scores).mean().item(),
-            'mean_weight': weight_stats['mean'],
-            'p90_weight': weight_stats['p90'],
-            'mean_valuation': valuations.mean().item()
+            "policy_loss": [],
+            "value_loss": [],
+            "entropy": [],
+            "total_loss": [],
+            "kl_divergence": [],  # Track KL for stability
+            "mean_novelty": torch.tensor(novelty_scores).mean().item(),
+            "mean_weight": weight_stats["mean"],
+            "p90_weight": weight_stats["p90"],
+            "mean_valuation": valuations.mean().item(),
         }
 
         # PPO epochs
@@ -335,22 +337,27 @@ class PPOAgent:
                 # PPO clipped objective
                 ratio = torch.exp(logprobs - old_logprobs_batch)
                 surr1 = ratio * advantages_batch
-                surr2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * advantages_batch
+                surr2 = (
+                    torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps)
+                    * advantages_batch
+                )
 
                 # Policy loss (weighted by novelty)
                 policy_loss = -(torch.min(surr1, surr2) * weights_batch).mean()
 
                 # Value loss (weighted by novelty)
-                value_loss = ((returns_batch - values.squeeze()) ** 2 * weights_batch).mean()
+                value_loss = (
+                    (returns_batch - values.squeeze()) ** 2 * weights_batch
+                ).mean()
 
                 # Entropy bonus
                 entropy_loss = -entropy.mean()
 
                 # Total loss
                 loss = (
-                    policy_loss +
-                    self.value_coef * value_loss +
-                    self.entropy_coef * entropy_loss
+                    policy_loss
+                    + self.value_coef * value_loss
+                    + self.entropy_coef * entropy_loss
                 )
 
                 # Optimization step
@@ -360,14 +367,20 @@ class PPOAgent:
                 self.optimizer.step()
 
                 # Log metrics
-                metrics['policy_loss'].append(policy_loss.item())
-                metrics['value_loss'].append(value_loss.item())
-                metrics['entropy'].append(entropy.mean().item())
-                metrics['total_loss'].append(loss.item())
-                metrics['kl_divergence'].append(kl.item())
+                metrics["policy_loss"].append(policy_loss.item())
+                metrics["value_loss"].append(value_loss.item())
+                metrics["entropy"].append(entropy.mean().item())
+                metrics["total_loss"].append(loss.item())
+                metrics["kl_divergence"].append(kl.item())
 
         # Average metrics
-        for key in ['policy_loss', 'value_loss', 'entropy', 'total_loss', 'kl_divergence']:
+        for key in [
+            "policy_loss",
+            "value_loss",
+            "entropy",
+            "total_loss",
+            "kl_divergence",
+        ]:
             metrics[key] = np.mean(metrics[key])
 
         self.update_count += 1
@@ -377,15 +390,18 @@ class PPOAgent:
 
     def save(self, path):
         """Save model checkpoint."""
-        torch.save({
-            'actor_critic': self.ac.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'update_count': self.update_count
-        }, path)
+        torch.save(
+            {
+                "actor_critic": self.ac.state_dict(),
+                "optimizer": self.optimizer.state_dict(),
+                "update_count": self.update_count,
+            },
+            path,
+        )
 
     def load(self, path):
         """Load model checkpoint."""
         checkpoint = torch.load(path, map_location=self.device)
-        self.ac.load_state_dict(checkpoint['actor_critic'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.update_count = checkpoint['update_count']
+        self.ac.load_state_dict(checkpoint["actor_critic"])
+        self.optimizer.load_state_dict(checkpoint["optimizer"])
+        self.update_count = checkpoint["update_count"]

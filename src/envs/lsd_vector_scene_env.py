@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 
@@ -33,12 +33,18 @@ from src.config.econ_params import EconParams, load_econ_params
 from src.envs.dishwashing_env import summarize_episode_info
 from src.envs.lsd3d_env.gaussian_scene import GaussianScene, mesh_to_gaussians
 from src.envs.lsd3d_env.ggds import CameraRig, GGDSConfig, create_default_optimizer
-from src.envs.lsd3d_env.proxy_geometry import Mesh, VoxelGrid, scene_graph_to_voxels, voxels_to_mesh
+from src.envs.lsd3d_env.proxy_geometry import (
+    Mesh,
+    VoxelGrid,
+    scene_graph_to_voxels,
+    voxels_to_mesh,
+)
 from src.scene.vector_scene.encoding import SceneGraphEncoder, ordered_scene_tensors
 from src.scene.vector_scene.graph import (
     NodeType,
     ObjectClass,
     SceneGraph,
+    SceneEdge,
     SceneNode,
     SceneObject,
 )
@@ -51,31 +57,35 @@ except ImportError:
 
 def _default_econ_params() -> EconParams:
     """Create default EconParams for LSD Vector Scene Environment."""
-    return load_econ_params(
-        {
-            "price_per_unit": 0.30,
-            "damage_cost": 1.0,
-            "energy_Wh_per_attempt": 0.01,
-            "time_step_s": 1.0,
-            "base_rate": 2.0,
-            "p_min": 0.02,
-            "k_err": 0.15,
-            "q_speed": 2.0,
-            "q_care": 1.5,
-            "care_cost": 0.3,
-            "max_steps": 500,
-            "max_catastrophic_errors": 3,
-            "max_error_rate_sla": 0.15,
-            "min_steps_for_sla": 10,
-            "zero_throughput_patience": 50,
-        },
-        preset="toy",
+    return cast(
+        EconParams,
+        load_econ_params(
+            {
+                "price_per_unit": 0.30,
+                "damage_cost": 1.0,
+                "energy_Wh_per_attempt": 0.01,
+                "time_step_s": 1.0,
+                "base_rate": 2.0,
+                "p_min": 0.02,
+                "k_err": 0.15,
+                "q_speed": 2.0,
+                "q_care": 1.5,
+                "care_cost": 0.3,
+                "max_steps": 500,
+                "max_catastrophic_errors": 3,
+                "max_error_rate_sla": 0.15,
+                "min_steps_for_sla": 10,
+                "zero_throughput_patience": 50,
+            },
+            preset="toy",
+        ),
     )
 
 
 @dataclass
 class SceneGraphConfig:
     """Configuration for scene graph generation."""
+
     topology_type: str = "WAREHOUSE_AISLES"
     num_nodes: int = 30
     num_objects: int = 12
@@ -87,6 +97,7 @@ class SceneGraphConfig:
 @dataclass
 class VisualStyleConfig:
     """Configuration for visual style/rendering."""
+
     lighting: str = "DIM_INDOOR"
     clutter_level: str = "HIGH"
     material_mix: List[str] = field(default_factory=lambda: ["metal", "plastic"])
@@ -97,6 +108,7 @@ class VisualStyleConfig:
 @dataclass
 class BehaviourConfig:
     """Configuration for dynamic agent behaviour."""
+
     num_humans: int = 4
     num_robots: int = 1
     num_forklifts: int = 1
@@ -108,6 +120,7 @@ class BehaviourConfig:
 @dataclass
 class LSDVectorSceneEnvConfig:
     """Complete configuration for LSDVectorSceneEnv."""
+
     scene_graph_config: SceneGraphConfig = field(default_factory=SceneGraphConfig)
     visual_style_config: VisualStyleConfig = field(default_factory=VisualStyleConfig)
     behaviour_config: BehaviourConfig = field(default_factory=BehaviourConfig)
@@ -176,13 +189,16 @@ class LSDVectorSceneEnvConfig:
 
 def _compute_scene_id(config: LSDVectorSceneEnvConfig, graph: SceneGraph) -> str:
     """Compute a unique hash for the scene configuration + graph."""
-    data = json.dumps({
-        "config": config.to_dict(),
-        "num_nodes": len(graph.nodes),
-        "num_edges": len(graph.edges),
-        "num_objects": len(graph.objects),
-        "bbox": graph.bounding_box(),
-    }, sort_keys=True)
+    data = json.dumps(
+        {
+            "config": config.to_dict(),
+            "num_nodes": len(graph.nodes),
+            "num_edges": len(graph.edges),
+            "num_objects": len(graph.objects),
+            "bbox": graph.bounding_box(),
+        },
+        sort_keys=True,
+    )
     return hashlib.md5(data.encode()).hexdigest()[:16]
 
 
@@ -205,34 +221,50 @@ def _generate_scene_graph(config: SceneGraphConfig) -> SceneGraph:
     elif config.topology_type == "KITCHEN_LAYOUT":
         # Create simple kitchen layout
         nodes = []
-        edges = []
+        edges: List[SceneEdge] = []
         objects = []
 
         # Main kitchen area
-        nodes.append(SceneNode(
-            id=0,
-            polyline=np.array([[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], dtype=np.float32),
-            node_type=NodeType.KITCHEN_ZONE,
-            width=8.0,
-        ))
+        nodes.append(
+            SceneNode(
+                id=0,
+                polyline=np.array(
+                    [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], dtype=np.float32
+                ),
+                node_type=NodeType.KITCHEN_ZONE,
+                width=8.0,
+            )
+        )
 
         # Add counters, sinks
         obj_id = 0
         for x in [2.0, 5.0, 8.0]:
-            objects.append(SceneObject(
-                id=obj_id,
-                class_id=ObjectClass.TABLE,
-                x=x, y=1.0, z=0.0,
-                length=1.5, width=0.6, height=0.9,
-            ))
+            objects.append(
+                SceneObject(
+                    id=obj_id,
+                    class_id=ObjectClass.TABLE,
+                    x=x,
+                    y=1.0,
+                    z=0.0,
+                    length=1.5,
+                    width=0.6,
+                    height=0.9,
+                )
+            )
             obj_id += 1
 
-        objects.append(SceneObject(
-            id=obj_id,
-            class_id=ObjectClass.SINK,
-            x=5.0, y=7.0, z=0.0,
-            length=1.0, width=0.5, height=0.4,
-        ))
+        objects.append(
+            SceneObject(
+                id=obj_id,
+                class_id=ObjectClass.SINK,
+                x=5.0,
+                y=7.0,
+                z=0.0,
+                length=1.0,
+                width=0.5,
+                height=0.4,
+            )
+        )
 
         return SceneGraph(nodes=nodes, edges=edges, objects=objects)
 
@@ -260,45 +292,63 @@ def _add_dynamic_agents(
     for i in range(config.num_humans):
         x = rng.uniform(min_x + 1, max_x - 1)
         y = rng.uniform(min_y + 1, max_y - 1)
-        new_objects.append(SceneObject(
-            id=obj_id,
-            class_id=ObjectClass.HUMAN,
-            x=x, y=y, z=0.0,
-            heading=rng.uniform(0, 2 * np.pi),
-            speed=1.2,  # Walking speed
-            length=0.5, width=0.5, height=1.75,
-            attributes={"role": "worker", "agent_index": i},
-        ))
+        new_objects.append(
+            SceneObject(
+                id=obj_id,
+                class_id=ObjectClass.HUMAN,
+                x=x,
+                y=y,
+                z=0.0,
+                heading=rng.uniform(0, 2 * np.pi),
+                speed=1.2,  # Walking speed
+                length=0.5,
+                width=0.5,
+                height=1.75,
+                attributes={"role": "worker", "agent_index": i},
+            )
+        )
         obj_id += 1
 
     # Add robots (besides the ego robot)
     for i in range(config.num_robots):
         x = rng.uniform(min_x + 1, max_x - 1)
         y = rng.uniform(min_y + 1, max_y - 1)
-        new_objects.append(SceneObject(
-            id=obj_id,
-            class_id=ObjectClass.ROBOT,
-            x=x, y=y, z=0.0,
-            heading=rng.uniform(0, 2 * np.pi),
-            speed=0.8,
-            length=0.6, width=0.6, height=1.5,
-            attributes={"robot_type": "mobile_manipulator", "agent_index": i},
-        ))
+        new_objects.append(
+            SceneObject(
+                id=obj_id,
+                class_id=ObjectClass.ROBOT,
+                x=x,
+                y=y,
+                z=0.0,
+                heading=rng.uniform(0, 2 * np.pi),
+                speed=0.8,
+                length=0.6,
+                width=0.6,
+                height=1.5,
+                attributes={"robot_type": "mobile_manipulator", "agent_index": i},
+            )
+        )
         obj_id += 1
 
     # Add forklifts
     for i in range(config.num_forklifts):
         x = rng.uniform(min_x + 2, max_x - 2)
         y = rng.uniform(min_y + 2, max_y - 2)
-        new_objects.append(SceneObject(
-            id=obj_id,
-            class_id=ObjectClass.FORKLIFT,
-            x=x, y=y, z=0.0,
-            heading=rng.uniform(0, 2 * np.pi),
-            speed=2.0,  # Faster than humans
-            length=2.5, width=1.2, height=2.0,
-            attributes={"agent_index": i},
-        ))
+        new_objects.append(
+            SceneObject(
+                id=obj_id,
+                class_id=ObjectClass.FORKLIFT,
+                x=x,
+                y=y,
+                z=0.0,
+                heading=rng.uniform(0, 2 * np.pi),
+                speed=2.0,  # Faster than humans
+                length=2.5,
+                width=1.2,
+                height=2.0,
+                attributes={"agent_index": i},
+            )
+        )
         obj_id += 1
 
     return SceneGraph(
@@ -355,9 +405,11 @@ class LSDVectorSceneEnv:
         self._encoder: Optional[SceneGraphEncoder] = None
 
         # GGDS optimizer
-        self.ggds_optimizer = create_default_optimizer(GGDSConfig(
-            num_iterations=config.ggds_iterations,
-        ))
+        self.ggds_optimizer = create_default_optimizer(
+            GGDSConfig(
+                num_iterations=config.ggds_iterations,
+            )
+        )
 
         # Episode state
         self.steps = 0
@@ -379,10 +431,17 @@ class LSDVectorSceneEnv:
                 raise ImportError("PyTorch is required for scene encoding")
 
             # Compute input dimensions from a sample graph
-            sample_graph = SceneGraph.create_simple_warehouse(num_aisles=2, aisle_length=10.0)
+            sample_graph = SceneGraph.create_simple_warehouse(
+                num_aisles=2, aisle_length=10.0
+            )
             tensors = ordered_scene_tensors(sample_graph)
-            node_dim = tensors["node_features"].shape[-1] + tensors["node_positions"].shape[-1]
-            obj_dim = tensors["object_features"].shape[-1] + tensors["object_positions"].shape[-1]
+            node_dim = (
+                tensors["node_features"].shape[-1] + tensors["node_positions"].shape[-1]
+            )
+            obj_dim = (
+                tensors["object_features"].shape[-1]
+                + tensors["object_positions"].shape[-1]
+            )
 
             self._encoder = SceneGraphEncoder(
                 node_input_dim=node_dim,
@@ -439,7 +498,9 @@ class LSDVectorSceneEnv:
             self.gaussian_scene = self.ggds_optimizer.optimize_scene(
                 self.gaussian_scene,
                 camera_rig,
-                prompts=[f"A {self.config.scene_graph_config.topology_type.lower().replace('_', ' ')}"],
+                prompts=[
+                    f"A {self.config.scene_graph_config.topology_type.lower().replace('_', ' ')}"
+                ],
             )
 
     def reset(self) -> Dict[str, Any]:
@@ -456,6 +517,8 @@ class LSDVectorSceneEnv:
         self.energy_Wh = 0.0
 
         # Initialize agent states
+        if self.graph is None:
+            raise RuntimeError("Scene graph was not built during reset.")
         self.agent_states = AgentStateBatch.from_scene_graph(self.graph, timestamp=0.0)
 
         # Initialize trajectories
@@ -532,7 +595,10 @@ class LSDVectorSceneEnv:
         prev_errors = self.errors
         # Parse action
         if np.isscalar(action):
-            speed, care = float(np.clip(action, 0.0, 1.0)), 0.5
+            speed, care = (
+                float(np.clip(float(np.asarray(action).item()), 0.0, 1.0)),
+                0.5,
+            )
         else:
             speed = float(np.clip(action[0], 0.0, 1.0))
             care = float(np.clip(action[1], 0.0, 1.0)) if len(action) > 1 else 0.5
@@ -542,7 +608,7 @@ class LSDVectorSceneEnv:
 
         # Simulate task progress (similar to dishwashing but with scene context)
         rate_per_min = max(0.1, self.econ_params.base_rate * (0.5 + 0.5 * speed))
-        rate_per_min *= (1.0 - self.econ_params.care_cost * care)
+        rate_per_min *= 1.0 - self.econ_params.care_cost * care
 
         time_step_minutes = self.config.time_step_s / 60.0
         rate_per_step = rate_per_min * time_step_minutes
@@ -551,9 +617,11 @@ class LSDVectorSceneEnv:
         self.attempts += attempts
 
         # Error probability (scene complexity can affect this)
-        scene_complexity = len(self.agent_states.agents) / 10.0 if self.agent_states else 0.0
+        scene_complexity = (
+            len(self.agent_states.agents) / 10.0 if self.agent_states else 0.0
+        )
         p_err = self.econ_params.p_min + self.econ_params.k_err * (
-            speed ** self.econ_params.q_speed
+            speed**self.econ_params.q_speed
         ) * ((1.0 - care) ** self.econ_params.q_care)
         p_err += 0.02 * scene_complexity  # More agents = harder
         p_err = float(np.clip(p_err, 0.0, 0.5))
@@ -608,7 +676,9 @@ class LSDVectorSceneEnv:
             "delta_errors": delta_errors,
             "mpl_t": mpl_t,
             "ep_t": ep_t,
-            "error_rate_t": self.errors / max(1, self.completed) if self.completed > 0 else 0.0,
+            "error_rate_t": self.errors / max(1, self.completed)
+            if self.completed > 0
+            else 0.0,
             "units_done": self.completed,
             "errors": self.errors,
             "energy_Wh": self.energy_Wh,
@@ -623,15 +693,22 @@ class LSDVectorSceneEnv:
 
     def _get_difficulty_features(self) -> Dict[str, float]:
         """Extract difficulty features for logging."""
-        n_dynamic = len([a for a in (self.agent_states.agents if self.agent_states else [])
-                        if a.class_id in {ObjectClass.HUMAN, ObjectClass.FORKLIFT}])
+        n_dynamic = len(
+            [
+                a
+                for a in (self.agent_states.agents if self.agent_states else [])
+                if a.class_id in {ObjectClass.HUMAN, ObjectClass.FORKLIFT}
+            ]
+        )
 
         return {
             "graph_density": self.config.scene_graph_config.density,
             "route_length": self.config.scene_graph_config.route_length,
             "num_dynamic_agents": float(n_dynamic),
             "tilt": self.config.behaviour_config.tilt,
-            "occlusion_level": float(self.voxels.get_occupied_count()) / 1000.0 if self.voxels else 0.0,
+            "occlusion_level": float(self.voxels.get_occupied_count()) / 1000.0
+            if self.voxels
+            else 0.0,
         }
 
     def get_episode_log(self, info_history: List[Dict[str, Any]]) -> Dict[str, Any]:

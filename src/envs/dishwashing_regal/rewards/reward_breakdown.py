@@ -4,9 +4,8 @@ RewardBreakdownV1 implementation for dishwashing environment.
 Phase 4: Standardized reward decomposition for regality compliance.
 Maps fixed-base curriculum dishwashing metrics to RewardBreakdownV1 components.
 """
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 from src.contracts.schemas import RewardBreakdownV1
 

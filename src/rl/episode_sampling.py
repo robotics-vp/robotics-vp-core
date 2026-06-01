@@ -6,6 +6,7 @@ bounded sampler that can balance tiers, prioritize frontier datapacks,
 and weight by economic urgency without modifying reward math or training
 algorithms.
 """
+
 import copy
 import json
 import random
@@ -90,7 +91,11 @@ def _embodiment_metric(episode: Dict[str, Any], key: str, default: float) -> flo
             return float(episode.get(key, default))
         except Exception:
             return float(default)
-    desc = episode.get("descriptor", {}) if isinstance(episode.get("descriptor"), dict) else {}
+    desc = (
+        episode.get("descriptor", {})
+        if isinstance(episode.get("descriptor"), dict)
+        else {}
+    )
     if key in desc:
         try:
             return float(desc.get(key, default))
@@ -131,9 +136,14 @@ def _sampler_receipt_authority_class(queue_dispatch: Optional[Dict[str, Any]]) -
     return "bounded_authority"
 
 
-def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
+def _summarize_condition_metadata(
+    skill_mode: str, tags: Dict[str, float], phase: str
+) -> Dict[str, Any]:
     """Compact, JSON-safe summary of condition inputs for logging."""
-    tag_items = [f"{str(k)}:{float(v):.4f}" for k, v in sorted(tags.items(), key=lambda kv: str(kv[0]))]
+    tag_items = [
+        f"{str(k)}:{float(v):.4f}"
+        for k, v in sorted(tags.items(), key=lambda kv: str(kv[0]))
+    ]
     payload = f"{skill_mode}|{phase}|" + "|".join(tag_items)
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
     return {
@@ -144,7 +154,9 @@ def _summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase
     }
 
 
-def summarize_condition_metadata(skill_mode: str, tags: Dict[str, float], phase: str) -> Dict[str, Any]:
+def summarize_condition_metadata(
+    skill_mode: str, tags: Dict[str, float], phase: str
+) -> Dict[str, Any]:
     """Public wrapper for condition metadata summaries."""
     return _summarize_condition_metadata(skill_mode, tags, phase)
 
@@ -169,7 +181,10 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         objective_vector = datapack.objective_profile.objective_vector
     elif datapack.condition:
         # Fallback to condition profile if objective_profile is missing
-        objective_vector = datapack.condition.objective_vector + [0.0, 0.0]  # Pad to 5 dimensions
+        objective_vector = datapack.condition.objective_vector + [
+            0.0,
+            0.0,
+        ]  # Pad to 5 dimensions
 
     # Extract environment info
     env_name = datapack.task_name
@@ -212,8 +227,12 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     elif datapack.episode_metrics:
         w_embodiment = datapack.episode_metrics.get("w_embodiment")
         embodiment_drift_score = datapack.episode_metrics.get("embodiment_drift_score")
-        embodiment_impossible_contacts = datapack.episode_metrics.get("embodiment_physically_impossible_contacts")
-        embodiment_trust_override = datapack.episode_metrics.get("embodiment_trust_override_candidate")
+        embodiment_impossible_contacts = datapack.episode_metrics.get(
+            "embodiment_physically_impossible_contacts"
+        )
+        embodiment_trust_override = datapack.episode_metrics.get(
+            "embodiment_trust_override_candidate"
+        )
 
     # Compute sampling weight (higher for higher-tier, higher-trust datapacks)
     sampling_weight = trust_score * (1.0 + 0.5 * tier)  # Tier 2 gets 1.5x boost
@@ -227,8 +246,13 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
 
     # Epiplexity learnability stays canonical metadata for training distribution,
     # while reward math remains unchanged.
-    delta_epi = extract_epiplexity_summary_metric(datapack, metric="delta_epi_vs_baseline") or 0.0
-    epi_per_flop = extract_epiplexity_summary_metric(datapack, metric="epi_per_flop") or 0.0
+    delta_epi = (
+        extract_epiplexity_summary_metric(datapack, metric="delta_epi_vs_baseline")
+        or 0.0
+    )
+    epi_per_flop = (
+        extract_epiplexity_summary_metric(datapack, metric="epi_per_flop") or 0.0
+    )
     epi_conf = extract_epiplexity_summary_confidence(datapack) or 0.0
     w_epi = max(0.0, float(delta_epi)) * float(epi_conf)
     signal_yield_score, inferential_replay_weight = _descriptor_signal_yield(
@@ -256,7 +280,9 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
             summary_present=bool(datapack.epiplexity_summary),
             metadata={"source": "datapack_descriptor"},
         )
-    signal_yield_score = float(learnability_contract.signal_yield.get("score", signal_yield_score))
+    signal_yield_score = float(
+        learnability_contract.signal_yield.get("score", signal_yield_score)
+    )
     inferential_replay_weight = float(learnability_contract.inferential_replay_weight)
 
     # Episode length heuristic (can be overridden by env defaults)
@@ -266,22 +292,18 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         # Identification
         "pack_id": datapack.pack_id,
         "datapack_type": "stage1" if "stage1" in datapack.pack_id else "runtime",
-
         # Environment configuration
         "env_name": env_name,
         "task_type": env_name,
         "backend": backend,
         "engine_type": engine_type,
-
         # Objective and reward
         "objective_vector": objective_vector,
         "objective_preset": _infer_objective_preset(objective_vector),
-
         # Guidance
         "semantic_tags": semantic_tags,
         "focus_areas": focus_areas,
         "priority": priority,
-
         # Quality/sampling signals
         "tier": tier,
         "trust_score": trust_score,
@@ -295,20 +317,25 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
         "signal_yield_score": float(signal_yield_score),
         "inferential_replay_weight": float(inferential_replay_weight),
         "inferential_learnability_contract": learnability_contract.to_dict(),
-        "embodiment_drift_score": embodiment_drift_score if embodiment_drift_score is not None else 0.0,
-        "embodiment_physically_impossible_contacts": embodiment_impossible_contacts or 0,
+        "embodiment_drift_score": embodiment_drift_score
+        if embodiment_drift_score is not None
+        else 0.0,
+        "embodiment_physically_impossible_contacts": embodiment_impossible_contacts
+        or 0,
         "embodiment_trust_override_candidate": bool(embodiment_trust_override)
         if embodiment_trust_override is not None
         else False,
-
         # Episode parameters
         "episode_length": episode_length,
-
         # Logging/tracking
         "tags": {
-            "is_good": datapack.guidance_profile.is_good if datapack.guidance_profile else False,
+            "is_good": datapack.guidance_profile.is_good
+            if datapack.guidance_profile
+            else False,
             "main_driver": focus_areas[0] if focus_areas else "unknown",
-            "source": "stage1_diffusion_vla" if "stage1" in datapack.pack_id else "runtime",
+            "source": "stage1_diffusion_vla"
+            if "stage1" in datapack.pack_id
+            else "runtime",
         },
     }
     unified_weights = None
@@ -321,7 +348,9 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     except Exception:
         unified_weights = None
     if unified_weights is not None:
-        descriptor["unified_quality_weight"] = max(0.0, float(unified_weights.w_combined))
+        descriptor["unified_quality_weight"] = max(
+            0.0, float(unified_weights.w_combined)
+        )
         descriptor["unified_quality_eligible"] = bool(unified_weights.is_eligible)
         descriptor["unified_quality_reason"] = unified_weights.eligibility_reason
         descriptor["unified_quality"] = unified_weights.to_dict()
@@ -332,12 +361,16 @@ def datapack_to_rl_episode_descriptor(datapack: DataPackMeta) -> Dict[str, Any]:
     return descriptor
 
 
-def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> Dict[str, Any]:
+def replay_episode_to_rl_episode_descriptor(
+    episode: "ReplayEpisodeRecord",
+) -> Dict[str, Any]:
     """Convert a canonical replay episode into an RL sampler descriptor."""
     objective_axes = dict(episode.objective_tensor_summary.get("axes", {}) or {})
     quality_score = float(episode.datapack_summary.get("quality_score", 0.0) or 0.0)
     pricing_confidence = float(episode.pricing_summary.get("confidence", 0.0) or 0.0)
-    frontier_gain = float(episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0)
+    frontier_gain = float(
+        episode.datapack_summary.get("marginal_frontier_gain", 0.0) or 0.0
+    )
     epi_delta = float(
         episode.datapack_summary.get(
             "delta_epi_per_flop",
@@ -346,9 +379,16 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
         or 0.0
     )
     epi_conf = float(episode.datapack_summary.get("epi_confidence", 0.0) or 0.0)
-    transfer_score = max(0.0, 1.0 - float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0))
-    execution_preconditions = dict(episode.metadata.get("execution_preconditions", {}) or {})
-    future_signals = dict(execution_preconditions.get("metadata", {}).get("future_training_signals", {}) or {})
+    transfer_score = max(
+        0.0, 1.0 - float(episode.condition_vector.get("ood_risk_level", 0.0) or 0.0)
+    )
+    execution_preconditions = dict(
+        episode.metadata.get("execution_preconditions", {}) or {}
+    )
+    future_signals = dict(
+        execution_preconditions.get("metadata", {}).get("future_training_signals", {})
+        or {}
+    )
     learnability_contract = coerce_inferential_learnability_contract(
         episode.metadata.get("inferential_learnability_contract")
     )
@@ -372,9 +412,15 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             semantic_grounding_non_heuristic=bool(
                 future_signals.get("semantic_grounding_non_heuristic", False)
             ),
-            promotion_trace_complete=bool(future_signals.get("promotion_trace_complete", False)),
-            budget_settlement_live=bool(future_signals.get("budget_settlement_live", False)),
-            overlay_joined=bool(episode.metadata.get("epiplexity_overlay_joined", False)),
+            promotion_trace_complete=bool(
+                future_signals.get("promotion_trace_complete", False)
+            ),
+            budget_settlement_live=bool(
+                future_signals.get("budget_settlement_live", False)
+            ),
+            overlay_joined=bool(
+                episode.metadata.get("epiplexity_overlay_joined", False)
+            ),
             metadata={"source": "replay_episode_descriptor"},
         )
     signal_yield_score = float(learnability_contract.signal_yield.get("score", 0.0))
@@ -394,7 +440,9 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             float(objective_axes.get("safety", 0.0)),
             float(objective_axes.get("uncertainty", 0.0)),
         ],
-        "objective_preset": str(episode.metadata.get("objective_profile_id", "balanced_contract")),
+        "objective_preset": str(
+            episode.metadata.get("objective_profile_id", "balanced_contract")
+        ),
         "semantic_tags": sorted(
             {
                 str(tag)
@@ -406,12 +454,15 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
         "priority": "high" if pricing_confidence >= 0.7 else "medium",
         "tier": 2 if quality_score >= 0.8 else (1 if quality_score >= 0.45 else 0),
         "trust_score": pricing_confidence,
-        "delta_J": float(episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0) or 0.0),
+        "delta_J": float(
+            episode.econ_tensor_summary.get("axes", {}).get("value_earned", 0.0) or 0.0
+        ),
         "sampling_weight": max(0.1, 1.0 + frontier_gain),
         "w_embodiment": 1.0,
         "w_epi": max(
             0.0,
-            float(learnability_contract.epiplexity_delta) * float(learnability_contract.epiplexity_confidence),
+            float(learnability_contract.epiplexity_delta)
+            * float(learnability_contract.epiplexity_confidence),
         ),
         "delta_epi_per_flop": epi_delta,
         "epi_confidence": epi_conf,
@@ -424,7 +475,9 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
             "skill_mode": episode.skill_mode,
             "status": episode.status,
         },
-        "execution_preconditions": dict(episode.metadata.get("execution_preconditions", {}) or {}),
+        "execution_preconditions": dict(
+            episode.metadata.get("execution_preconditions", {}) or {}
+        ),
         "replay_summary": {
             "source_domain": episode.source_domain,
             "condition_vector": dict(episode.condition_vector),
@@ -435,12 +488,19 @@ def replay_episode_to_rl_episode_descriptor(episode: "ReplayEpisodeRecord") -> D
         },
     }
     if execution_preconditions:
-        descriptor["unified_quality_weight"] = max(0.0, float(execution_preconditions.get("readiness_score", 1.0)))
-        descriptor["unified_quality_eligible"] = bool(execution_preconditions.get("ready", True))
+        descriptor["unified_quality_weight"] = max(
+            0.0, float(execution_preconditions.get("readiness_score", 1.0))
+        )
+        descriptor["unified_quality_eligible"] = bool(
+            execution_preconditions.get("ready", True)
+        )
         descriptor["unified_quality_reason"] = (
             "passed"
             if descriptor["unified_quality_eligible"]
-            else ",".join(execution_preconditions.get("blocking_preconditions", []) or ["execution_preconditions_failed"])
+            else ",".join(
+                execution_preconditions.get("blocking_preconditions", [])
+                or ["execution_preconditions_failed"]
+            )
         )
     descriptor = normalize_episode_descriptor(descriptor)
     errors = validate_episode_descriptor(descriptor)
@@ -553,10 +613,14 @@ class DataPackRLSampler:
         )
         self.last_queue_dispatch_artifact: Optional[Dict[str, Any]] = None
         if isinstance(unified_quality_profile, dict):
-            unified_quality_profile = ObjectiveProfile.from_dict(unified_quality_profile)
+            unified_quality_profile = ObjectiveProfile.from_dict(
+                unified_quality_profile
+            )
         self.unified_quality_profile = unified_quality_profile
         self.unified_quality_compiler = (
-            ObjectiveCompiler(unified_quality_profile) if unified_quality_profile else None
+            ObjectiveCompiler(unified_quality_profile)
+            if unified_quality_profile
+            else None
         )
         self.skill_resolver = SkillModeResolver(
             default_mode="efficiency_throughput",
@@ -596,7 +660,9 @@ class DataPackRLSampler:
         self._episodes.sort(key=lambda e: e["descriptor"].get("pack_id", ""))
 
         if not self._episodes:
-            raise ValueError("DataPackRLSampler requires at least one episode descriptor")
+            raise ValueError(
+                "DataPackRLSampler requires at least one episode descriptor"
+            )
 
     def sample_batch(
         self,
@@ -627,8 +693,12 @@ class DataPackRLSampler:
             "embodiment_quality_drift",
             "epiplexity_roi",
         }:
-            weight_strategy = "balanced" if strategy_name == "balanced" else strategy_name
-            selected = self._sample_balanced(batch_size, rng, weight_strategy=weight_strategy)
+            weight_strategy = (
+                "balanced" if strategy_name == "balanced" else strategy_name
+            )
+            selected = self._sample_balanced(
+                batch_size, rng, weight_strategy=weight_strategy
+            )
         elif strategy_name == "frontier_prioritized":
             selected = self._sample_frontier_prioritized(batch_size, rng)
         elif strategy_name == "econ_urgency":
@@ -640,9 +710,16 @@ class DataPackRLSampler:
             selected,
             strategy_name=strategy_name,
         )
-        if dispatch is not None and dispatch.get("mode") not in {"log_only", "compare_only"}:
+        if dispatch is not None and dispatch.get("mode") not in {
+            "log_only",
+            "compare_only",
+        }:
             selected = [
-                next(episode for episode in selected if _episode_key(episode) == episode_id)
+                next(
+                    episode
+                    for episode in selected
+                    if _episode_key(episode) == episode_id
+                )
                 for episode_id in dispatch["ordered_episode_ids"]
                 if any(_episode_key(episode) == episode_id for episode in selected)
             ]
@@ -658,7 +735,10 @@ class DataPackRLSampler:
                 ep,
                 strategy_name,
                 queue_dispatch=(
-                    {"mode": dispatch["mode"], "decision": dispatch["decision_map"].get(_episode_key(ep), {})}
+                    {
+                        "mode": dispatch["mode"],
+                        "decision": dispatch["decision_map"].get(_episode_key(ep), {}),
+                    }
                     if dispatch is not None
                     else None
                 ),
@@ -705,7 +785,9 @@ class DataPackRLSampler:
         weight_strategy = self._weight_strategy_for_strategy(strategy_name)
         weight_map = {
             _episode_key(episode): float(weight)
-            for episode, weight in zip(selected, self._compute_weights(selected, strategy=weight_strategy))
+            for episode, weight in zip(
+                selected, self._compute_weights(selected, strategy=weight_strategy)
+            )
         }
         dispatch = apply_live_queue_selection(
             selected,
@@ -719,8 +801,12 @@ class DataPackRLSampler:
             episode = episode_lookup.get(episode_id)
             if episode is None:
                 continue
-            decision = next(
-                (row for row in dispatch["entries"] if row.get("episode_id") == episode_id),
+            decision: Dict[str, Any] = next(
+                (
+                    row
+                    for row in dispatch["entries"]
+                    if row.get("episode_id") == episode_id
+                ),
                 {},
             )
             ordered_descriptors.append(
@@ -740,12 +826,16 @@ class DataPackRLSampler:
             strategy_name=strategy_name,
             queue_dispatch=dispatch,
         )
-        dispatch["sampler_policy_receipt"] = copy.deepcopy(self.last_sampler_policy_artifact)
+        dispatch["sampler_policy_receipt"] = copy.deepcopy(
+            self.last_sampler_policy_artifact
+        )
         return dispatch
 
     def _select_strategy(self, strategy: Optional[str]) -> str:
         requested_strategy = strategy.lower() if strategy else None
-        heuristic_distribution = self._heuristic_strategy_distribution(requested_strategy)
+        heuristic_distribution = self._heuristic_strategy_distribution(
+            requested_strategy
+        )
         ordered = sorted(heuristic_distribution.items(), key=lambda kv: (-kv[1], kv[0]))
         heuristic_selected_strategy = ordered[0][0]
         final_strategy = heuristic_selected_strategy
@@ -763,44 +853,72 @@ class DataPackRLSampler:
                 helper_result.get("strategy_distribution", {})
             )
             helper_plan = dict(helper_result.get("sampling_plan", {}) or {})
-            blend_policy = dict(self.sampler_policy_helper.inference_contract.get("helper_blend_policy", {}) or {})
-            stage = str(self.sampler_policy_helper.promotion_stage or "shadow_candidate")
+            blend_policy = dict(
+                self.sampler_policy_helper.inference_contract.get(
+                    "helper_blend_policy", {}
+                )
+                or {}
+            )
+            stage = str(
+                self.sampler_policy_helper.promotion_stage or "shadow_candidate"
+            )
             strategy_weight = float(
                 blend_policy.get(
-                    "promoted_strategy_weight" if stage == "promoted" else "shadow_candidate_strategy_weight",
+                    "promoted_strategy_weight"
+                    if stage == "promoted"
+                    else "shadow_candidate_strategy_weight",
                     0.35 if stage == "promoted" else 0.12,
                 )
             )
             plan_weight = float(
                 blend_policy.get(
-                    "promoted_plan_weight" if stage == "promoted" else "shadow_candidate_plan_weight",
+                    "promoted_plan_weight"
+                    if stage == "promoted"
+                    else "shadow_candidate_plan_weight",
                     0.35 if stage == "promoted" else 0.12,
                 )
             )
             blended_distribution = {
                 candidate: float(
-                    max(0.0, (1.0 - strategy_weight) * heuristic_distribution.get(candidate, 0.0))
-                    + max(0.0, strategy_weight * helper_distribution.get(candidate, 0.0))
+                    max(
+                        0.0,
+                        (1.0 - strategy_weight)
+                        * heuristic_distribution.get(candidate, 0.0),
+                    )
+                    + max(
+                        0.0, strategy_weight * helper_distribution.get(candidate, 0.0)
+                    )
                 )
                 for candidate in SAMPLER_POLICY_STRATEGIES
             }
             blended_distribution = normalize_strategy_distribution(blended_distribution)
-            final_strategy = requested_strategy or sorted(
-                blended_distribution.items(), key=lambda kv: (-kv[1], kv[0])
-            )[0][0]
+            final_strategy = (
+                requested_strategy
+                or sorted(blended_distribution.items(), key=lambda kv: (-kv[1], kv[0]))[
+                    0
+                ][0]
+            )
             sampling_plan = {
                 name: max(
                     0.0,
                     min(
                         1.0,
-                        (1.0 - plan_weight) * float(build_default_sampling_plan().get(name, 0.0))
-                        + plan_weight * float(helper_plan.get(name, build_default_sampling_plan().get(name, 0.0))),
+                        (1.0 - plan_weight)
+                        * float(build_default_sampling_plan().get(name, 0.0))
+                        + plan_weight
+                        * float(
+                            helper_plan.get(
+                                name, build_default_sampling_plan().get(name, 0.0)
+                            )
+                        ),
                     ),
                 )
                 for name in SAMPLER_PLAN_PARAMETER_NAMES
             }
             strategy_source = (
-                "heuristic_plus_learned_helper" if requested_strategy is None else "requested_plus_learned_plan"
+                "heuristic_plus_learned_helper"
+                if requested_strategy is None
+                else "requested_plus_learned_plan"
             )
             promotion_stage = stage
             helper_trace = {
@@ -861,8 +979,12 @@ class DataPackRLSampler:
             "embodiment_quality_drift",
             "epiplexity_roi",
         }:
-            weight_strategy = "balanced" if strategy_name == "balanced" else strategy_name
-            return self._sample_balanced(batch_size, rng, weight_strategy=weight_strategy)
+            weight_strategy = (
+                "balanced" if strategy_name == "balanced" else strategy_name
+            )
+            return self._sample_balanced(
+                batch_size, rng, weight_strategy=weight_strategy
+            )
         if strategy_name == "frontier_prioritized":
             return self._sample_frontier_prioritized(batch_size, rng)
         if strategy_name == "econ_urgency":
@@ -873,8 +995,14 @@ class DataPackRLSampler:
         normalized, errors = normalize_and_validate(descriptor)
         if errors:
             raise ValueError(f"Episode descriptor validation failed: {errors}")
-        pack_id = normalized.get("pack_id") or normalized.get("episode_id") or f"desc_{len(self._episodes)}"
-        enrichment = self.enrichment_map.get(pack_id, _normalize_enrichment(descriptor.get("enrichment")))
+        pack_id = (
+            normalized.get("pack_id")
+            or normalized.get("episode_id")
+            or f"desc_{len(self._episodes)}"
+        )
+        enrichment = self.enrichment_map.get(
+            pack_id, _normalize_enrichment(descriptor.get("enrichment"))
+        )
 
         episode = {
             "descriptor": normalized,
@@ -888,40 +1016,55 @@ class DataPackRLSampler:
         episode["frontier_score"] = self._compute_frontier_score(episode)
         episode["econ_urgency_score"] = self._compute_econ_urgency_score(episode)
         episode["recap_weight_multiplier"] = self._recap_weight_multiplier(episode)
-        episode["unified_quality_weight"] = max(0.0, float(descriptor.get("unified_quality_weight", 1.0)))
-        episode["unified_quality_eligible"] = bool(descriptor.get("unified_quality_eligible", True))
+        episode["unified_quality_weight"] = max(
+            0.0, float(descriptor.get("unified_quality_weight", 1.0))
+        )
+        episode["unified_quality_eligible"] = bool(
+            descriptor.get("unified_quality_eligible", True)
+        )
         episode["unified_quality_reason"] = descriptor.get("unified_quality_reason")
         uq_payload = descriptor.get("unified_quality", {})
         if not isinstance(uq_payload, dict):
             uq_payload = {}
         episode["unified_quality_signal_bundle"] = uq_payload.get("signal_bundle")
-        episode["unified_quality_objective_tensor"] = uq_payload.get("objective_tensor_slice")
-        episode["unified_quality_constraint_flags"] = uq_payload.get("constraint_flags", [])
-        
+        episode["unified_quality_objective_tensor"] = uq_payload.get(
+            "objective_tensor_slice"
+        )
+        episode["unified_quality_constraint_flags"] = uq_payload.get(
+            "constraint_flags", []
+        )
+
         # Auditor Integration
         episode["auditor_result"] = None
         episode["auditor_weight_multiplier"] = 1.0
-        if self.use_datapack_auditor and getattr(self.policies, "datapack_auditor", None):
+        if self.use_datapack_auditor and getattr(
+            self.policies, "datapack_auditor", None
+        ):
             try:
                 # Build features
+                signal_bundle = episode.get("unified_quality_signal_bundle", {})
+                if not isinstance(signal_bundle, dict):
+                    signal_bundle = {}
                 auditor_features = self.policies.datapack_auditor.build_features(
-                    datapack=descriptor, # passing dict as datapack proxy
-                    semantic_tags=enrichment.get("novelty_tags", []) + enrichment.get("fragility_tags", []) + enrichment.get("risk_tags", []), # Flatten tags roughly
+                    datapack=descriptor,  # passing dict as datapack proxy
+                    semantic_tags=enrichment.get("novelty_tags", [])
+                    + enrichment.get("fragility_tags", [])
+                    + enrichment.get("risk_tags", []),  # Flatten tags roughly
                     econ_slice={
                         "expected_mpl_gain": episode["expected_mpl_gain"],
                         "novelty_score": episode["novelty_score"],
                         "frontier_gain": episode.get("frontier_score", 0.0),
-                        "plausibility_score": (
-                            episode.get("unified_quality_signal_bundle", {}) or {}
-                        ).get("map_first", 1.0),
+                        "plausibility_score": signal_bundle.get("map_first", 1.0),
                         "reward_hack_risk": 0.0,
                     },
-                    recap_scores={"quality_score": episode.get("recap_goodness_score", 0.5)}
+                    recap_scores={
+                        "quality_score": episode.get("recap_goodness_score", 0.5)
+                    },
                 )
                 # Evaluate
                 audit = self.policies.datapack_auditor.evaluate(auditor_features)
                 episode["auditor_result"] = audit
-                
+
                 # Compute mild weight multiplier based on rating
                 rating = audit.get("rating", "BBB")
                 # AAA -> 1.2, AA -> 1.1, A -> 1.0, BBB -> 1.0, JUNK -> 0.8
@@ -948,34 +1091,45 @@ class DataPackRLSampler:
                 mapping[str(key)] = _normalize_enrichment(enrichment_payload)
         return mapping
 
-    def _compute_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
+    def _compute_weights(
+        self, episodes: List[Dict[str, Any]], strategy: str
+    ) -> List[float]:
         weights = self._compute_base_weights(episodes, strategy)
         adjusted = self._apply_queue_dispatch_weight_adjustments(episodes, weights)
         if adjusted and max(adjusted) <= 0.0:
             return [1.0] * len(adjusted)
         return adjusted
 
-    def _compute_base_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
+    def _compute_base_weights(
+        self, episodes: List[Dict[str, Any]], strategy: str
+    ) -> List[float]:
         heuristic_weights = self._compute_heuristic_base_weights(episodes, strategy)
         if not episodes or self.sampler_policy_helper is None:
-            traces = dict(self._last_sampler_weight_traces)
-            traces.update({
-                _episode_key(episode): {
-                    "strategy": strategy,
-                    "heuristic_weight": float(weight),
-                    "final_weight": float(weight),
-                    "weight_source": "heuristic_prior",
-                    "promotion_stage": "heuristic_fallback",
+            fallback_traces = dict(self._last_sampler_weight_traces)
+            fallback_traces.update(
+                {
+                    _episode_key(episode): {
+                        "strategy": strategy,
+                        "heuristic_weight": float(weight),
+                        "final_weight": float(weight),
+                        "weight_source": "heuristic_prior",
+                        "promotion_stage": "heuristic_fallback",
+                    }
+                    for episode, weight in zip(episodes, heuristic_weights)
                 }
-                for episode, weight in zip(episodes, heuristic_weights)
-            })
-            self._last_sampler_weight_traces = traces
+            )
+            self._last_sampler_weight_traces = fallback_traces
             return heuristic_weights
-        blend_policy = dict(self.sampler_policy_helper.inference_contract.get("helper_blend_policy", {}) or {})
+        blend_policy = dict(
+            self.sampler_policy_helper.inference_contract.get("helper_blend_policy", {})
+            or {}
+        )
         stage = str(self.sampler_policy_helper.promotion_stage or "shadow_candidate")
         helper_weight = float(
             blend_policy.get(
-                "promoted_episode_weight" if stage == "promoted" else "shadow_candidate_episode_weight",
+                "promoted_episode_weight"
+                if stage == "promoted"
+                else "shadow_candidate_episode_weight",
                 0.35 if stage == "promoted" else 0.12,
             )
         )
@@ -987,7 +1141,8 @@ class DataPackRLSampler:
             helper_multiplier = 0.7 + 0.6 * max(0.0, min(1.0, helper_score))
             final_weight = max(
                 0.0,
-                float(heuristic_weight) * ((1.0 - helper_weight) + helper_weight * helper_multiplier),
+                float(heuristic_weight)
+                * ((1.0 - helper_weight) + helper_weight * helper_multiplier),
             )
             adjusted.append(final_weight)
             traces[_episode_key(episode)] = {
@@ -1006,7 +1161,9 @@ class DataPackRLSampler:
         self._last_sampler_weight_traces = merged_traces
         return adjusted
 
-    def _compute_heuristic_base_weights(self, episodes: List[Dict[str, Any]], strategy: str) -> List[float]:
+    def _compute_heuristic_base_weights(
+        self, episodes: List[Dict[str, Any]], strategy: str
+    ) -> List[float]:
         if not episodes:
             return []
         policy = getattr(self, "policies", None)
@@ -1015,12 +1172,20 @@ class DataPackRLSampler:
             weight_map = policy.sampler_weights.evaluate(features, strategy=strategy)
             weights = [float(weight_map.get(_episode_key(ep), 0.0)) for ep in episodes]
         elif strategy == "frontier_prioritized":
-            weights = [max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+            weights = [
+                max(ep["frontier_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
         elif strategy == "econ_urgency":
-            weights = [max(ep["econ_urgency_score"], 1e-3) * ep.get("recap_weight_multiplier", 1.0) for ep in episodes]
+            weights = [
+                max(ep["econ_urgency_score"], 1e-3)
+                * ep.get("recap_weight_multiplier", 1.0)
+                for ep in episodes
+            ]
         elif strategy == "embodiment_quality":
             weights = [
-                max(_embodiment_metric(ep, "w_embodiment", 1.0), 0.1) * ep.get("recap_weight_multiplier", 1.0)
+                max(_embodiment_metric(ep, "w_embodiment", 1.0), 0.1)
+                * ep.get("recap_weight_multiplier", 1.0)
                 for ep in episodes
             ]
         elif strategy == "embodiment_drift_penalty":
@@ -1047,7 +1212,15 @@ class DataPackRLSampler:
             ]
         elif strategy == "inferential_yield":
             weights = [
-                max(float(ep.get("inferential_replay_weight", ep["descriptor"].get("inferential_replay_weight", 0.0))), 0.1)
+                max(
+                    float(
+                        ep.get(
+                            "inferential_replay_weight",
+                            ep["descriptor"].get("inferential_replay_weight", 0.0),
+                        )
+                    ),
+                    0.1,
+                )
                 * ep.get("recap_weight_multiplier", 1.0)
                 for ep in episodes
             ]
@@ -1062,11 +1235,15 @@ class DataPackRLSampler:
             ]
         return clamped
 
-    def _heuristic_strategy_distribution(self, requested_strategy: Optional[str]) -> Dict[str, float]:
+    def _heuristic_strategy_distribution(
+        self, requested_strategy: Optional[str]
+    ) -> Dict[str, float]:
         if requested_strategy:
             return normalize_strategy_distribution({requested_strategy: 1.0})
         if self.advisory and self.advisory.sampler_strategy_overrides:
-            return normalize_strategy_distribution(self.advisory.sampler_strategy_overrides)
+            return normalize_strategy_distribution(
+                self.advisory.sampler_strategy_overrides
+            )
         default_strategy = self.default_strategy.lower()
         soft_prior = {strategy: 0.25 for strategy in SAMPLER_POLICY_STRATEGIES}
         soft_prior[default_strategy] = 0.4
@@ -1079,16 +1256,23 @@ class DataPackRLSampler:
         if trace_strategy == strategy_name:
             plan = dict(trace.get("sampling_plan", {}) or {})
             if plan:
-                return {name: float(plan.get(name, default_plan[name])) for name in SAMPLER_PLAN_PARAMETER_NAMES}
+                return {
+                    name: float(plan.get(name, default_plan[name]))
+                    for name in SAMPLER_PLAN_PARAMETER_NAMES
+                }
         return default_plan
 
     def _eligible_pool(self) -> List[Dict[str, Any]]:
         if not self.use_unified_quality:
             return list(self._episodes)
-        eligible = [ep for ep in self._episodes if ep.get("unified_quality_eligible", True)]
+        eligible = [
+            ep for ep in self._episodes if ep.get("unified_quality_eligible", True)
+        ]
         return eligible if eligible else list(self._episodes)
 
-    def _sample_balanced(self, batch_size: int, rng: random.Random, weight_strategy: str = "balanced") -> List[Dict[str, Any]]:
+    def _sample_balanced(
+        self, batch_size: int, rng: random.Random, weight_strategy: str = "balanced"
+    ) -> List[Dict[str, Any]]:
         """Tier-aware sampling that lightly respects trust_score without over-concentrating."""
         episodes = self._eligible_pool()
         tier_groups: Dict[int, List[Dict[str, Any]]] = {}
@@ -1105,7 +1289,9 @@ class DataPackRLSampler:
 
         # Allocate remaining slots deterministically to tiers with headroom
         remaining = batch_size - total_assigned
-        tier_order = sorted(self.tier_ratios.keys(), key=lambda t: (-self.tier_ratios[t], t))
+        tier_order = sorted(
+            self.tier_ratios.keys(), key=lambda t: (-self.tier_ratios[t], t)
+        )
         while remaining > 0:
             allocated = False
             for tier in tier_order:
@@ -1123,7 +1309,9 @@ class DataPackRLSampler:
             pool = tier_groups[tier]
             need = counts.get(tier, 0)
             weights = self._compute_weights(pool, strategy=weight_strategy)
-            selected.extend(_weighted_sample_without_replacement(pool, weights, need, rng))
+            selected.extend(
+                _weighted_sample_without_replacement(pool, weights, need, rng)
+            )
 
         # Fill any shortfall from the remaining pool with uniform coverage
         if len(selected) < batch_size:
@@ -1145,31 +1333,52 @@ class DataPackRLSampler:
             return default_weight
         try:
             objective_tensor = ObjectiveTensor.from_dict(payload)
-            return max(0.0, float(self.unified_quality_compiler.scalarize(objective_tensor)))
+            return max(
+                0.0, float(self.unified_quality_compiler.scalarize(objective_tensor))
+            )
         except Exception:
             return default_weight
 
-    def _sample_frontier_prioritized(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
+    def _sample_frontier_prioritized(
+        self, batch_size: int, rng: random.Random
+    ) -> List[Dict[str, Any]]:
         """Bias sampling toward high ΔMPL/ΔJ datapacks while keeping diversity."""
         episodes = self._eligible_pool()
         plan = self._resolve_sampling_plan("frontier_prioritized")
         scores = [ep["frontier_score"] for ep in episodes]
-        threshold = _percentile(scores, float(plan.get("frontier_threshold_quantile", 0.65)))
+        threshold = _percentile(
+            scores, float(plan.get("frontier_threshold_quantile", 0.65))
+        )
         urgent = [ep for ep in episodes if ep["frontier_score"] >= threshold]
         non_urgent = [ep for ep in episodes if ep["frontier_score"] < threshold]
 
-        urgent_count = min(max(int(batch_size * float(plan.get("frontier_focus_ratio", 0.7))), 1), len(urgent))
+        urgent_count = min(
+            max(int(batch_size * float(plan.get("frontier_focus_ratio", 0.7))), 1),
+            len(urgent),
+        )
         weights_urgent = self._compute_weights(urgent, strategy="frontier_prioritized")
-        selected = _weighted_sample_without_replacement(urgent, weights_urgent, urgent_count, rng)
+        selected = _weighted_sample_without_replacement(
+            urgent, weights_urgent, urgent_count, rng
+        )
 
         remaining = batch_size - len(selected)
         if remaining > 0:
-            fallback_pool = non_urgent if non_urgent else [ep for ep in urgent if ep not in selected]
+            fallback_pool = (
+                non_urgent
+                if non_urgent
+                else [ep for ep in urgent if ep not in selected]
+            )
             weights_fallback = self._compute_weights(fallback_pool, strategy="balanced")
-            selected.extend(_weighted_sample_without_replacement(fallback_pool, weights_fallback, remaining, rng))
+            selected.extend(
+                _weighted_sample_without_replacement(
+                    fallback_pool, weights_fallback, remaining, rng
+                )
+            )
         return selected[:batch_size]
 
-    def _sample_econ_urgency(self, batch_size: int, rng: random.Random) -> List[Dict[str, Any]]:
+    def _sample_econ_urgency(
+        self, batch_size: int, rng: random.Random
+    ) -> List[Dict[str, Any]]:
         """Weight by economic urgency and novelty, with a diversity buffer."""
         episodes = self._eligible_pool()
         plan = self._resolve_sampling_plan("econ_urgency")
@@ -1178,21 +1387,41 @@ class DataPackRLSampler:
         urgent = [ep for ep in episodes if ep["econ_urgency_score"] >= threshold]
         baseline = [ep for ep in episodes if ep["econ_urgency_score"] < threshold]
 
-        urgent_count = min(max(int(batch_size * float(plan.get("econ_focus_ratio", 0.65))), 1), len(urgent))
-        critical = [ep for ep in urgent if (ep["enrichment"].get("supervision_hints", {}) or {}).get("priority_level", "").lower() == "critical"]
-        critical_sorted = sorted(critical, key=lambda ep: ep["econ_urgency_score"], reverse=True)
+        urgent_count = min(
+            max(int(batch_size * float(plan.get("econ_focus_ratio", 0.65))), 1),
+            len(urgent),
+        )
+        critical = [
+            ep
+            for ep in urgent
+            if (ep["enrichment"].get("supervision_hints", {}) or {})
+            .get("priority_level", "")
+            .lower()
+            == "critical"
+        ]
+        critical_sorted = sorted(
+            critical, key=lambda ep: ep["econ_urgency_score"], reverse=True
+        )
         critical_selection = critical_sorted[: min(len(critical_sorted), urgent_count)]
         selected = list(critical_selection)
 
         remaining_urgent = [ep for ep in urgent if ep not in selected]
-        weights_urgent = self._compute_weights(remaining_urgent, strategy="econ_urgency")
-        selected.extend(_weighted_sample_without_replacement(remaining_urgent, weights_urgent, urgent_count - len(selected), rng))
+        weights_urgent = self._compute_weights(
+            remaining_urgent, strategy="econ_urgency"
+        )
+        selected.extend(
+            _weighted_sample_without_replacement(
+                remaining_urgent, weights_urgent, urgent_count - len(selected), rng
+            )
+        )
 
         remaining = batch_size - len(selected)
         if remaining > 0:
             pool = baseline if baseline else [ep for ep in urgent if ep not in selected]
             weights = self._compute_weights(pool, strategy="balanced")
-            selected.extend(_weighted_sample_without_replacement(pool, weights, remaining, rng))
+            selected.extend(
+                _weighted_sample_without_replacement(pool, weights, remaining, rng)
+            )
         return selected[:batch_size]
 
     def _compute_frontier_score(self, episode: Dict[str, Any]) -> float:
@@ -1218,12 +1447,16 @@ class DataPackRLSampler:
         coherence = _safe_float(enrichment.get("coherence_score"), 0.0)
         hints = enrichment.get("supervision_hints", {}) or {}
         priority_level = (hints.get("priority_level") or "medium").lower()
-        priority_boost = {"low": 0.8, "medium": 1.0, "high": 1.1, "critical": 1.2}.get(priority_level, 1.0)
+        priority_boost = {"low": 0.8, "medium": 1.0, "high": 1.1, "critical": 1.2}.get(
+            priority_level, 1.0
+        )
         weight_mult = _safe_float(hints.get("suggested_weight_multiplier"), 1.0)
         trust = float(desc.get("trust_score", 0.5))
         tier_weight = {0: 0.8, 1: 1.0, 2: 1.15}.get(desc.get("tier", 1), 1.0)
 
-        econ_signal = 0.45 * novelty + 0.45 * min(expected_gain / 10.0, 1.0) + 0.1 * coherence
+        econ_signal = (
+            0.45 * novelty + 0.45 * min(expected_gain / 10.0, 1.0) + 0.1 * coherence
+        )
         econ_signal *= priority_boost * weight_mult
         econ_signal *= (0.6 + 0.4 * trust) * tier_weight
         if trust > 0.8:
@@ -1263,16 +1496,22 @@ class DataPackRLSampler:
         }
         weight_trace = self._last_sampler_weight_traces.get(_episode_key(episode), {})
         if weight_trace:
-            descriptor["sampling_metadata"]["sampler_policy"] = copy.deepcopy(weight_trace)
+            descriptor["sampling_metadata"]["sampler_policy"] = copy.deepcopy(
+                weight_trace
+            )
         if self._last_sampler_strategy_trace:
             descriptor["sampling_metadata"]["sampler_strategy_trace"] = copy.deepcopy(
                 self._last_sampler_strategy_trace
             )
         if queue_dispatch:
-            descriptor["sampling_metadata"]["queue_dispatch"] = copy.deepcopy(queue_dispatch)
+            descriptor["sampling_metadata"]["queue_dispatch"] = copy.deepcopy(
+                queue_dispatch
+            )
         if self.use_condition_vector:
             tags = descriptor.get("semantic_tags") or {}
-            tag_map = {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
+            tag_map = (
+                {str(t): 1.0 for t in tags} if isinstance(tags, list) else dict(tags)
+            )
             skill_mode = self.skill_resolver.resolve(
                 tags=tag_map,
                 trust_matrix=self.trust_matrix,
@@ -1284,18 +1523,34 @@ class DataPackRLSampler:
                 use_condition_vector=self.use_condition_vector,
             )
             descriptor["sampling_metadata"]["skill_mode"] = skill_mode
-            descriptor["sampling_metadata"]["condition_metadata"] = _summarize_condition_metadata(
-                skill_mode, tag_map, descriptor["sampling_metadata"].get("phase", "warmup")
+            descriptor["sampling_metadata"]["condition_metadata"] = (
+                _summarize_condition_metadata(
+                    skill_mode,
+                    tag_map,
+                    descriptor["sampling_metadata"].get("phase", "warmup"),
+                )
             )
-            descriptor["condition_metadata"] = descriptor["sampling_metadata"]["condition_metadata"]
+            descriptor["condition_metadata"] = descriptor["sampling_metadata"][
+                "condition_metadata"
+            ]
         if episode.get("auditor_result"):
-            descriptor["sampling_metadata"]["auditor_rating"] = episode["auditor_result"].get("rating")
-            descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
-            meta = descriptor.get("metadata") if isinstance(descriptor.get("metadata"), dict) else {}
+            descriptor["sampling_metadata"]["auditor_rating"] = episode[
+                "auditor_result"
+            ].get("rating")
+            descriptor["sampling_metadata"]["auditor_predicted_econ"] = episode[
+                "auditor_result"
+            ].get("predicted_econ")
+            meta = (
+                descriptor.get("metadata")
+                if isinstance(descriptor.get("metadata"), dict)
+                else {}
+            )
             meta = copy.deepcopy(meta)
             meta["auditor_rating"] = episode["auditor_result"].get("rating")
             meta["auditor_score"] = episode["auditor_result"].get("score")
-            meta["auditor_predicted_econ"] = episode["auditor_result"].get("predicted_econ")
+            meta["auditor_predicted_econ"] = episode["auditor_result"].get(
+                "predicted_econ"
+            )
             descriptor["metadata"] = meta
         return to_json_safe(descriptor)
 
@@ -1306,8 +1561,21 @@ class DataPackRLSampler:
     ) -> List[float]:
         if not episodes or not self.live_queue_selection:
             return weights
-        mode = str(getattr(self.queue_dispatch_config.mode, "value", self.queue_dispatch_config.mode) or "disabled").lower()
-        if mode in {QueueDispatchMode.DISABLED.value, "disabled", QueueDispatchMode.LOG_ONLY.value, "log_only", "compare_only"}:
+        mode = str(
+            getattr(
+                self.queue_dispatch_config.mode,
+                "value",
+                self.queue_dispatch_config.mode,
+            )
+            or "disabled"
+        ).lower()
+        if mode in {
+            QueueDispatchMode.DISABLED.value,
+            "disabled",
+            QueueDispatchMode.LOG_ONLY.value,
+            "log_only",
+            "compare_only",
+        }:
             return weights
         dispatch = apply_live_queue_selection(
             episodes,
@@ -1340,7 +1608,14 @@ class DataPackRLSampler:
     ) -> Optional[Dict[str, Any]]:
         if not selected or not self.live_queue_selection:
             return None
-        mode = str(getattr(self.queue_dispatch_config.mode, "value", self.queue_dispatch_config.mode) or "disabled").lower()
+        mode = str(
+            getattr(
+                self.queue_dispatch_config.mode,
+                "value",
+                self.queue_dispatch_config.mode,
+            )
+            or "disabled"
+        ).lower()
         if mode in {QueueDispatchMode.DISABLED.value, "disabled"}:
             return None
         weight_strategy = self._weight_strategy_for_strategy(strategy_name)
@@ -1349,7 +1624,10 @@ class DataPackRLSampler:
             live_queue_selection=self.live_queue_selection,
             base_weights={
                 _episode_key(episode): float(weight)
-                for episode, weight in zip(selected, self._compute_base_weights(selected, strategy=weight_strategy))
+                for episode, weight in zip(
+                    selected,
+                    self._compute_base_weights(selected, strategy=weight_strategy),
+                )
             },
             config=self.queue_dispatch_config,
         )
@@ -1363,7 +1641,9 @@ class DataPackRLSampler:
             strategy_name=strategy_name,
             queue_dispatch=dispatch,
         )
-        dispatch["sampler_policy_receipt"] = copy.deepcopy(self.last_sampler_policy_artifact)
+        dispatch["sampler_policy_receipt"] = copy.deepcopy(
+            self.last_sampler_policy_artifact
+        )
         return dispatch
 
     def _build_sampler_policy_receipt(
@@ -1374,7 +1654,11 @@ class DataPackRLSampler:
         queue_dispatch: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         heuristic_distribution = self._heuristic_strategy_distribution(
-            str((self._last_sampler_strategy_trace or {}).get("requested_strategy") or "") or None
+            str(
+                (self._last_sampler_strategy_trace or {}).get("requested_strategy")
+                or ""
+            )
+            or None
         )
         pool_feature_map = build_sampler_pool_feature_map(
             selected,
@@ -1393,30 +1677,51 @@ class DataPackRLSampler:
             if weights:
                 top_k = max(1, len(weights) // 4)
                 top_mean = sum(sorted(weights, reverse=True)[:top_k]) / float(top_k)
-                strategy_scores[candidate] = 0.6 * (sum(weights) / float(len(weights))) + 0.4 * top_mean
+                strategy_scores[candidate] = (
+                    0.6 * (sum(weights) / float(len(weights))) + 0.4 * top_mean
+                )
             else:
                 strategy_scores[candidate] = 0.0
         total_score = sum(max(0.0, value) for value in strategy_scores.values())
         strategy_targets = {
             candidate: (
                 0.5 * heuristic_distribution.get(candidate, 0.0)
-                + 0.5 * (max(0.0, strategy_scores.get(candidate, 0.0)) / total_score if total_score > 0.0 else 0.0)
+                + 0.5
+                * (
+                    max(0.0, strategy_scores.get(candidate, 0.0)) / total_score
+                    if total_score > 0.0
+                    else 0.0
+                )
             )
             for candidate in SAMPLER_POLICY_STRATEGIES
         }
         strategy_targets = normalize_strategy_distribution(strategy_targets)
-        frontier_scores = [float(episode.get("frontier_score", 0.0)) for episode in selected]
-        econ_scores = [float(episode.get("econ_urgency_score", 0.0)) for episode in selected]
+        frontier_scores = [
+            float(episode.get("frontier_score", 0.0)) for episode in selected
+        ]
+        econ_scores = [
+            float(episode.get("econ_urgency_score", 0.0)) for episode in selected
+        ]
         frontier_peak = max(frontier_scores) if frontier_scores else 0.0
         frontier_mean = sum(frontier_scores) / float(max(len(frontier_scores), 1))
         econ_peak = max(econ_scores) if econ_scores else 0.0
         econ_mean = sum(econ_scores) / float(max(len(econ_scores), 1))
-        frontier_concentration = max(0.0, min(1.0, (frontier_peak - frontier_mean) / max(frontier_peak, 1.0)))
-        econ_concentration = max(0.0, min(1.0, (econ_peak - econ_mean) / max(econ_peak, 1.0)))
+        frontier_concentration = max(
+            0.0, min(1.0, (frontier_peak - frontier_mean) / max(frontier_peak, 1.0))
+        )
+        econ_concentration = max(
+            0.0, min(1.0, (econ_peak - econ_mean) / max(econ_peak, 1.0))
+        )
         sampling_plan_targets = {
-            "frontier_threshold_quantile": max(0.45, min(0.75, 0.70 - 0.20 * frontier_concentration)),
-            "frontier_focus_ratio": max(0.45, min(0.85, 0.55 + 0.25 * frontier_concentration)),
-            "econ_threshold_quantile": max(0.40, min(0.75, 0.67 - 0.20 * econ_concentration)),
+            "frontier_threshold_quantile": max(
+                0.45, min(0.75, 0.70 - 0.20 * frontier_concentration)
+            ),
+            "frontier_focus_ratio": max(
+                0.45, min(0.85, 0.55 + 0.25 * frontier_concentration)
+            ),
+            "econ_threshold_quantile": max(
+                0.40, min(0.75, 0.67 - 0.20 * econ_concentration)
+            ),
             "econ_focus_ratio": max(0.45, min(0.85, 0.52 + 0.25 * econ_concentration)),
         }
         selected_ids = {_episode_key(episode) for episode in selected}
@@ -1442,17 +1747,24 @@ class DataPackRLSampler:
                     "episode_id": episode_id,
                     "feature_map": build_sampler_episode_feature_map(episode),
                     "strategy_weight_targets": {
-                        candidate: float(normalized_targets.get(candidate, {}).get(episode_id, 0.0))
+                        candidate: float(
+                            normalized_targets.get(candidate, {}).get(episode_id, 0.0)
+                        )
                         for candidate in SAMPLER_POLICY_STRATEGIES
                     },
-                    "selected_in_batch": episode_id in selected_ids and not bool(dispatch_decision.get("dropped", False)),
-                    "target_source": "receipt_feedback" if has_receipt_feedback else "heuristic_bootstrap",
+                    "selected_in_batch": episode_id in selected_ids
+                    and not bool(dispatch_decision.get("dropped", False)),
+                    "target_source": "receipt_feedback"
+                    if has_receipt_feedback
+                    else "heuristic_bootstrap",
                     "metadata": {
                         "has_receipt_feedback": has_receipt_feedback,
                         "queue_dispatch_authority_class": str(
                             dispatch_decision.get(
                                 "authority_class",
-                                (queue_dispatch or {}).get("authority_class", "observational_only"),
+                                (queue_dispatch or {}).get(
+                                    "authority_class", "observational_only"
+                                ),
                             )
                             or "observational_only"
                         ),
@@ -1469,22 +1781,30 @@ class DataPackRLSampler:
             "receipt_id": f"sampler_policy_{strategy_name}_{len(selected)}",
             "target_source": target_source,
             "heuristic_selected_strategy": str(
-                (self._last_sampler_strategy_trace or {}).get("heuristic_selected_strategy", strategy_name)
+                (self._last_sampler_strategy_trace or {}).get(
+                    "heuristic_selected_strategy", strategy_name
+                )
             ),
-            "final_strategy": str((self._last_sampler_strategy_trace or {}).get("final_strategy", strategy_name)),
+            "final_strategy": str(
+                (self._last_sampler_strategy_trace or {}).get(
+                    "final_strategy", strategy_name
+                )
+            ),
             "pool_feature_map": pool_feature_map,
             "strategy_targets": strategy_targets,
             "sampling_plan_targets": sampling_plan_targets,
             "runtime_trace": copy.deepcopy(self._last_sampler_strategy_trace or {}),
             "episode_entries": episode_entries,
-            "queue_dispatch_summary": copy.deepcopy(dict((queue_dispatch or {}).get("summary", {}) or {})),
+            "queue_dispatch_summary": copy.deepcopy(
+                dict((queue_dispatch or {}).get("summary", {}) or {})
+            ),
         }
         return receipt
 
 
 def _normalize_enrichment(enrichment: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Ensure enrichment payload from Stage 2 is JSON-safe and keyed."""
-    base = {
+    base: Dict[str, Any] = {
         "novelty_tags": [],
         "fragility_tags": [],
         "risk_tags": [],
@@ -1508,8 +1828,10 @@ def _normalize_enrichment(enrichment: Optional[Dict[str, Any]]) -> Dict[str, Any
     if enrichment is None:
         return copy.deepcopy(base)
 
-    merged = copy.deepcopy(base)
-    payload = enrichment.get("enrichment", enrichment) if isinstance(enrichment, dict) else {}
+    merged: Dict[str, Any] = copy.deepcopy(base)
+    payload = (
+        enrichment.get("enrichment", enrichment) if isinstance(enrichment, dict) else {}
+    )
     for key, value in payload.items():
         if key == "supervision_hints" and isinstance(value, dict):
             merged["supervision_hints"].update(value)
@@ -1563,7 +1885,7 @@ def _weighted_sample_without_replacement(
         cumulative = 0.0
         choice_idx = 0
         for idx, (item, weight) in enumerate(available):
-            cumulative += (weight if weight > 0 else 1e-6)
+            cumulative += weight if weight > 0 else 1e-6
             if cumulative >= r:
                 choice_idx = idx
                 break

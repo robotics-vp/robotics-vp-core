@@ -9,7 +9,7 @@ from src.config.econ_params import EconParams
 DishwashingParams = EconParams
 
 # Limb grouping placeholder (no explicit joints; treat all energy as shoulder/base)
-LIMB_GROUPS = {
+LIMB_GROUPS: Dict[str, List[int]] = {
     "shoulder": [],
     "elbow": [],
     "wrist": [],
@@ -17,6 +17,8 @@ LIMB_GROUPS = {
 }
 # Placeholder joint names (non-physics env)
 JOINT_NAMES = ["joint_0"]
+
+
 class DishwashingEnv:
     """
     Dishwashing environment with 2D action space: (speed, care).
@@ -30,6 +32,7 @@ class DishwashingEnv:
 
     This makes 6% SLA feasible: speed≈0.6, care≈0.6 → MP≈90-110/hr, err≈5-7%
     """
+
     def __init__(self, params: EconParams):
         self.p = params
         self.reset()
@@ -68,7 +71,7 @@ class DishwashingEnv:
             "t": self.t,
             "completed": self.completed,
             "attempts": self.attempts,
-            "errors": self.errors
+            "errors": self.errors,
         }
 
     def step(self, action):
@@ -80,7 +83,6 @@ class DishwashingEnv:
         """
         prev_completed = self.completed
         prev_errors = self.errors
-        prev_energy = self.energy_Wh
 
         # Parse 2D action
         if np.isscalar(action):
@@ -94,7 +96,7 @@ class DishwashingEnv:
         rate_per_min = max(0.1, self.p.base_rate * (0.5 + 0.5 * speed))
 
         # Care reduces throughput (effort cost)
-        rate_per_min *= (1.0 - self.p.care_cost * care)
+        rate_per_min *= 1.0 - self.p.care_cost * care
 
         # Convert to per-step rate
         time_step_minutes = self.p.time_step_s / 60.0
@@ -105,7 +107,9 @@ class DishwashingEnv:
 
         # Error probability with controllability
         # p_err = p_min + k * speed^q_s * (1-care)^q_c
-        p_err = self.p.p_min + self.p.k_err * (speed ** self.p.q_speed) * ((1.0 - care) ** self.p.q_care)
+        p_err = self.p.p_min + self.p.k_err * (speed**self.p.q_speed) * (
+            (1.0 - care) ** self.p.q_care
+        )
         p_err = float(np.clip(p_err, 0.0, 0.5))
 
         errs = np.random.binomial(attempts, p_err)
@@ -125,14 +129,18 @@ class DishwashingEnv:
         # Per-limb power/energy (no joint torques; attribute all to shoulder/base)
         dt = self.p.time_step_s
         power_total_W = delta_energy_Wh * 3600.0 / max(dt, 1e-6)
-        limb_power_W = {limb: power_total_W if limb == "shoulder" else 0.0 for limb in LIMB_GROUPS}
+        limb_power_W = {
+            limb: power_total_W if limb == "shoulder" else 0.0 for limb in LIMB_GROUPS
+        }
         for limb, pwr in limb_power_W.items():
             self.limb_power_sum_W[limb] += pwr
             self.limb_peak_power_W[limb] = max(self.limb_peak_power_W[limb], pwr)
             self.limb_energy_Wh[limb] += pwr * dt / 3600.0
         # Skill-level energy (if HRL sets current_skill_id)
         if hasattr(self, "current_skill_id") and self.current_skill_id:
-            skill_map = self.skill_energy_Wh.setdefault(self.current_skill_id, {k: 0.0 for k in LIMB_GROUPS})
+            skill_map = self.skill_energy_Wh.setdefault(
+                self.current_skill_id, {k: 0.0 for k in LIMB_GROUPS}
+            )
             for limb, pwr in limb_power_W.items():
                 skill_map[limb] += pwr * dt / 3600.0
         # Per-joint (placeholder zeros; no torques in this env)
@@ -182,7 +190,11 @@ class DishwashingEnv:
                 done = True
                 terminated_reason = "sla_violation"
 
-        if (not done) and self.steps >= self.p.zero_throughput_patience and self.completed == 0:
+        if (
+            (not done)
+            and self.steps >= self.p.zero_throughput_patience
+            and self.completed == 0
+        ):
             done = True
             terminated_reason = "zero_throughput"
 
@@ -209,11 +221,15 @@ class DishwashingEnv:
             "delta_errors": delta_errors,
             "mpl_t": mpl_t,
             "ep_t": ep_t,
-            "error_rate_t": self.errors / max(1, self.completed) if self.completed > 0 else 0.0,
+            "error_rate_t": self.errors / max(1, self.completed)
+            if self.completed > 0
+            else 0.0,
             "units_done": self.completed,
             "errors": self.errors,
             "energy_Wh": self.energy_Wh,
-            "energy_Wh_per_unit": delta_energy_Wh / max(delta_units, 1e-6) if delta_units > 0 else 0.0,
+            "energy_Wh_per_unit": delta_energy_Wh / max(delta_units, 1e-6)
+            if delta_units > 0
+            else 0.0,
             "current_skill_id": getattr(self, "current_skill_id", None),
             "limb_energy_Wh": self.limb_energy_Wh,
             "skill_energy_Wh": self.skill_energy_Wh,
@@ -229,7 +245,9 @@ class DishwashingEnv:
         for limb, wh in self.limb_energy_Wh.items():
             energy_per_limb[limb] = {
                 "Wh": wh,
-                "Wh_per_unit": wh / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+                "Wh_per_unit": wh / max(self.completed, 1e-6)
+                if self.completed > 0
+                else 0.0,
                 "Wh_per_hour": wh / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
                 "power_sum_W": self.limb_power_sum_W.get(limb, 0.0),
                 "power_peak_W": self.limb_peak_power_W.get(limb, 0.0),
@@ -249,13 +267,17 @@ class DishwashingEnv:
         for jn, wh in self.joint_energy_Wh.items():
             energy_per_joint[jn] = {
                 "Wh": wh,
-                "Wh_per_unit": wh / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
+                "Wh_per_unit": wh / max(self.completed, 1e-6)
+                if self.completed > 0
+                else 0.0,
                 "Wh_per_hour": wh / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
                 "avg_power_W": self.joint_power_sum_W.get(jn, 0.0) / max(self.steps, 1),
                 "peak_power_W": self.joint_peak_power_W.get(jn, 0.0),
-                "avg_abs_velocity": self.joint_abs_vel_sum.get(jn, 0.0) / max(self.steps, 1),
+                "avg_abs_velocity": self.joint_abs_vel_sum.get(jn, 0.0)
+                / max(self.steps, 1),
                 "max_abs_velocity": self.joint_max_vel.get(jn, 0.0),
-                "avg_abs_torque": self.joint_abs_tau_sum.get(jn, 0.0) / max(self.steps, 1),
+                "avg_abs_torque": self.joint_abs_tau_sum.get(jn, 0.0)
+                / max(self.steps, 1),
                 "max_abs_torque": self.joint_max_tau.get(jn, 0.0),
                 "directionality": {
                     "pos_steps": self.joint_dir_counts.get(jn, {}).get("pos", 0),
@@ -268,8 +290,14 @@ class DishwashingEnv:
         info["energy_per_effector"] = {
             "ee_main": {
                 "Wh": self.effector_energy_Wh.get("ee_main", 0.0),
-                "Wh_per_unit": self.effector_energy_Wh.get("ee_main", 0.0) / max(self.completed, 1e-6) if self.completed > 0 else 0.0,
-                "Wh_per_hour": self.effector_energy_Wh.get("ee_main", 0.0) / max(self.t / 3600.0, 1e-6) if self.t > 0 else 0.0,
+                "Wh_per_unit": self.effector_energy_Wh.get("ee_main", 0.0)
+                / max(self.completed, 1e-6)
+                if self.completed > 0
+                else 0.0,
+                "Wh_per_hour": self.effector_energy_Wh.get("ee_main", 0.0)
+                / max(self.t / 3600.0, 1e-6)
+                if self.t > 0
+                else 0.0,
             }
         }
         info["coordination_metrics"] = {
@@ -297,6 +325,7 @@ class EpisodeInfoSummary:
         profit: total profit (revenue - error cost) aggregated over steps
         wage_parity: optional wage parity metric (robot wage / human wage) if available
     """
+
     termination_reason: str
     mpl_episode: float
     ep_episode: float
@@ -355,8 +384,12 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
     ep_episode = (units_done / total_energy) if total_energy > 0 else 0.0
     error_rate_episode = errors / max(1.0, units_done)
     throughput_units_per_hour = mpl_episode
-    energy_Wh_per_unit = total_energy / max(units_done, 1e-6) if total_energy > 0 else 0.0
-    energy_Wh_per_hour = total_energy / max(time_hours, 1e-6) if total_energy > 0 else 0.0
+    energy_Wh_per_unit = (
+        total_energy / max(units_done, 1e-6) if total_energy > 0 else 0.0
+    )
+    energy_Wh_per_hour = (
+        total_energy / max(time_hours, 1e-6) if total_energy > 0 else 0.0
+    )
     profit = sum(step.get("profit_step", 0.0) for step in info_history)
     limb_energy = last.get("limb_energy_Wh", {})
     skill_energy = last.get("skill_energy_Wh", {})
@@ -384,6 +417,8 @@ def summarize_episode_info(info_history: List[Dict[str, Any]]) -> EpisodeInfoSum
         coordination_metrics=coordination_metrics,
         profit=profit,
         episode_id=last.get("episode_id", str(uuid.uuid4())),
-        media_refs=last.get("media_refs", {"sim_trace": f"sim://{last.get('t',0.0):.3f}"}),
+        media_refs=last.get(
+            "media_refs", {"sim_trace": f"sim://{last.get('t', 0.0):.3f}"}
+        ),
         wage_parity=None,
     )

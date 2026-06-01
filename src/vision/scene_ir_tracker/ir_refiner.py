@@ -3,17 +3,17 @@ IR Refiner.
 
 Implements inverse rendering refinement with alternating optimization.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -231,16 +231,22 @@ class IRRefiner:
             scale=entity.scale,
             class_name=entity.class_name,
             mask_2d=entity.mask_2d.copy() if entity.mask_2d is not None else None,
-            mask_logits=entity.mask_logits.copy() if entity.mask_logits is not None else None,
+            mask_logits=entity.mask_logits.copy()
+            if entity.mask_logits is not None
+            else None,
             geometry_handle=entity.geometry_handle,
             z_shape=entity.z_shape.copy() if entity.z_shape is not None else None,
             z_tex=entity.z_tex.copy() if entity.z_tex is not None else None,
-            z_shape_ema=entity.z_shape_ema.copy() if entity.z_shape_ema is not None else None,
+            z_shape_ema=entity.z_shape_ema.copy()
+            if entity.z_shape_ema is not None
+            else None,
             z_tex_ema=entity.z_tex_ema.copy() if entity.z_tex_ema is not None else None,
             visibility=entity.visibility,
             occlusion_score=entity.occlusion_score,
             ir_loss=entity.ir_loss,
-            joints_3d={k: v.copy() for k, v in entity.joints_3d.items()} if entity.joints_3d else None,
+            joints_3d={k: v.copy() for k, v in entity.joints_3d.items()}
+            if entity.joints_3d
+            else None,
         )
 
     def _optimize_phase(
@@ -332,7 +338,9 @@ class IRRefiner:
             combined_mask = torch.max(combined_mask, mask)
 
         if combined_mask.sum() > 0:
-            rgb_mse = ((rendered_rgb - target_rgb) ** 2 * combined_mask.unsqueeze(0)).sum()
+            rgb_mse = (
+                (rendered_rgb - target_rgb) ** 2 * combined_mask.unsqueeze(0)
+            ).sum()
             rgb_mse = rgb_mse / (combined_mask.sum() * 3 + 1e-8)
         else:
             rgb_mse = torch.tensor(0.0, device=device)
@@ -345,10 +353,10 @@ class IRRefiner:
         for entity in entities:
             if entity.z_shape is not None:
                 z = torch.from_numpy(entity.z_shape).to(device)
-                reg_loss = reg_loss + (z ** 2).mean()
+                reg_loss = reg_loss + (z**2).mean()
             if entity.z_tex is not None:
                 z = torch.from_numpy(entity.z_tex).to(device)
-                reg_loss = reg_loss + (z ** 2).mean()
+                reg_loss = reg_loss + (z**2).mean()
 
         # Combine losses
         total_loss = (
@@ -382,7 +390,9 @@ class IRRefiner:
 
         for t, entities in enumerate(frames_entities):
             target_rgb = target_rgb_sequence[t]
-            target_masks = target_masks_sequence[t] if t < len(target_masks_sequence) else {}
+            target_masks = (
+                target_masks_sequence[t] if t < len(target_masks_sequence) else {}
+            )
 
             refined, result = self.refine(entities, target_rgb, target_masks, camera)
             refined_frames.append(refined)

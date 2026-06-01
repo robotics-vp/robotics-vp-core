@@ -9,12 +9,14 @@ Phase A improvements:
 
 Returns RGB video observations from simulated dishwashing task.
 """
+
 import numpy as np
-import pybullet as p
-import pybullet_data
+import pybullet as p  # type: ignore[import-not-found]
+import pybullet_data  # type: ignore[import-untyped]
 from collections import deque
 from typing import Tuple, Dict, Any
 import time
+
 
 class DishwashingPhysicsEnv:
     """
@@ -40,7 +42,7 @@ class DishwashingPhysicsEnv:
         gripper_failure_rate=0.02,
         # Phase A: Human-ish throughput caps
         max_speed_multiplier=2.0,  # Cap at 2x human speed
-        max_acceleration=1.0  # Limit sudden movements
+        max_acceleration=1.0,  # Limit sudden movements
     ):
         """
         Args:
@@ -84,9 +86,9 @@ class DishwashingPhysicsEnv:
         # Camera configuration (will be jittered per episode if enabled)
         if camera_config is None:
             camera_config = {
-                'position': [0.0, 0.5, 0.8],
-                'target': [0.0, 0.0, 0.0],
-                'fov': 60
+                "position": [0.0, 0.5, 0.8],
+                "target": [0.0, 0.0, 0.0],
+                "fov": 60,
             }
         self.base_camera_config = camera_config
         self.camera_config = camera_config.copy()
@@ -132,19 +134,23 @@ class DishwashingPhysicsEnv:
         # Set up simulation
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.8)
-        p.setTimeStep(1./240.)
+        p.setTimeStep(1.0 / 240.0)
 
         # Load ground plane
         p.loadURDF("plane.urdf")
 
         # Create simple "sink" (box)
-        sink_collision = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.3, 0.3, 0.05])
-        sink_visual = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.3, 0.3, 0.05], rgbaColor=[0.7, 0.7, 0.7, 1])
+        sink_collision = p.createCollisionShape(
+            p.GEOM_BOX, halfExtents=[0.3, 0.3, 0.05]
+        )
+        sink_visual = p.createVisualShape(
+            p.GEOM_BOX, halfExtents=[0.3, 0.3, 0.05], rgbaColor=[0.7, 0.7, 0.7, 1]
+        )
         self.sink_id = p.createMultiBody(
             baseMass=0,
             baseCollisionShapeIndex=sink_collision,
             baseVisualShapeIndex=sink_visual,
-            basePosition=[0, 0, -0.05]
+            basePosition=[0, 0, -0.05],
         )
 
         # Create "robot arm" (simple gripper simulation)
@@ -154,7 +160,7 @@ class DishwashingPhysicsEnv:
             kuka_urdf,
             basePosition=[0, 0, 0],
             useFixedBase=True,
-            flags=p.URDF_USE_INERTIA_FROM_FILE
+            flags=p.URDF_USE_INERTIA_FROM_FILE,
         )
 
         # Controlled joints: all revolute joints except last flange
@@ -170,15 +176,14 @@ class DishwashingPhysicsEnv:
             self.robot_id,
             self.controlled_joint_ids,
             controlMode=p.VELOCITY_CONTROL,
-            forces=[0.0] * len(self.controlled_joint_ids)
+            forces=[0.0] * len(self.controlled_joint_ids),
         )
 
         # Phase A: Randomize camera position (jitter)
         if self.camera_jitter > 0:
             jitter = np.random.uniform(-self.camera_jitter, self.camera_jitter, size=3)
-            self.camera_config['position'] = [
-                self.base_camera_config['position'][i] + jitter[i]
-                for i in range(3)
+            self.camera_config["position"] = [
+                self.base_camera_config["position"][i] + jitter[i] for i in range(3)
             ]
         else:
             self.camera_config = self.base_camera_config.copy()
@@ -202,29 +207,30 @@ class DishwashingPhysicsEnv:
                 pos_x, pos_y = 0.15, 0.0
                 lateral_friction = 0.5
 
-            dish_collision = p.createCollisionShape(p.GEOM_CYLINDER, radius=0.08, height=0.01)
+            dish_collision = p.createCollisionShape(
+                p.GEOM_CYLINDER, radius=0.08, height=0.01
+            )
             dish_visual = p.createVisualShape(
-                p.GEOM_CYLINDER,
-                radius=0.08,
-                length=0.01,
-                rgbaColor=[0.9, 0.9, 0.9, 1]
+                p.GEOM_CYLINDER, radius=0.08, length=0.01, rgbaColor=[0.9, 0.9, 0.9, 1]
             )
             dish_id = p.createMultiBody(
                 baseMass=dish_mass,
                 baseCollisionShapeIndex=dish_collision,
                 baseVisualShapeIndex=dish_visual,
-                basePosition=[pos_x, pos_y, 0.05 + i * 0.015]
+                basePosition=[pos_x, pos_y, 0.05 + i * 0.015],
             )
 
             # Set friction
             p.changeDynamics(dish_id, -1, lateralFriction=lateral_friction)
 
             self.dishes.append(dish_id)
-            self.dish_properties.append({
-                'mass': dish_mass,
-                'friction': lateral_friction,
-                'is_wet': lateral_friction < 0.4  # Low friction = wet/slippery
-            })
+            self.dish_properties.append(
+                {
+                    "mass": dish_mass,
+                    "friction": lateral_friction,
+                    "is_wet": lateral_friction < 0.4,  # Low friction = wet/slippery
+                }
+            )
 
         # Reset episode state
         self.t = 0.0
@@ -262,7 +268,9 @@ class DishwashingPhysicsEnv:
         # Phase A: Cap speed to human-ish throughput (no anime-speed)
         # Baseline speed = 0.5, max allowed = max_speed_multiplier * baseline
         baseline_speed = 0.5
-        effective_speed = min(self.current_speed, self.max_speed_multiplier * baseline_speed)
+        effective_speed = min(
+            self.current_speed, self.max_speed_multiplier * baseline_speed
+        )
 
         # Update robot position based on capped speed
         robot_pos, robot_orn = p.getBasePositionAndOrientation(self.robot_id)
@@ -281,23 +289,29 @@ class DishwashingPhysicsEnv:
         # Phase A: Acceleration smoothing (low-pass filter)
         # Compute desired velocity
         dt = 1.0 / 240.0 * 10  # Time for 10 sub-steps
-        desired_velocity = np.array([
-            (target_x - robot_pos[0]) / dt,
-            (target_y - robot_pos[1]) / dt,
-            (target_z - robot_pos[2]) / dt
-        ])
+        desired_velocity = np.array(
+            [
+                (target_x - robot_pos[0]) / dt,
+                (target_y - robot_pos[1]) / dt,
+                (target_z - robot_pos[2]) / dt,
+            ]
+        )
 
         # Acceleration limiting: smooth transition from previous velocity
         # Use exponential moving average (alpha controls smoothing)
         alpha = 0.3  # Lower = more smoothing, higher = more responsive
-        smoothed_velocity = alpha * desired_velocity + (1 - alpha) * self.previous_velocity
+        smoothed_velocity = (
+            alpha * desired_velocity + (1 - alpha) * self.previous_velocity
+        )
 
         # Clip acceleration to max_acceleration
         velocity_delta = smoothed_velocity - self.previous_velocity
         accel_magnitude = np.linalg.norm(velocity_delta) / dt
         if accel_magnitude > self.max_acceleration:
             # Scale down velocity change to respect acceleration limit
-            velocity_delta = velocity_delta * (self.max_acceleration * dt / np.linalg.norm(velocity_delta))
+            velocity_delta = velocity_delta * (
+                self.max_acceleration * dt / np.linalg.norm(velocity_delta)
+            )
             smoothed_velocity = self.previous_velocity + velocity_delta
 
         # Update previous velocity for next step
@@ -306,11 +320,7 @@ class DishwashingPhysicsEnv:
         # Apply smoothed velocity control
         # Compute target position from smoothed velocity
         target_pos = robot_pos + smoothed_velocity * dt
-        p.resetBasePositionAndOrientation(
-            self.robot_id,
-            target_pos,
-            robot_orn
-        )
+        p.resetBasePositionAndOrientation(self.robot_id, target_pos, robot_orn)
 
         # Simulate physics
         for _ in range(10):  # Sub-steps for smoother simulation
@@ -320,13 +330,14 @@ class DishwashingPhysicsEnv:
         # Check for dish interactions (attempt)
         # Use time-based triggering instead of strict spatial condition
         # This ensures attempts actually happen so errors can occur
-        attempt_probability = 0.1 * self.current_speed  # Speed-dependent (0-0.1 per step)
+        attempt_probability = (
+            0.1 * self.current_speed
+        )  # Speed-dependent (0-0.1 per step)
         if np.random.rand() < attempt_probability:
             self.attempts += 1
 
-            # Initialize error flag and type
+            # Initialize error flag
             is_error = False
-            error_type = None
 
             # Channel 1: Slip probability (wet dishes)
             # If grasping a wet/low-friction dish, higher chance of slip
@@ -334,26 +345,28 @@ class DishwashingPhysicsEnv:
                 dish_pos, _ = p.getBasePositionAndOrientation(dish_id)
 
                 # Check if robot is near this dish
-                dist_to_dish = np.linalg.norm(np.array([target_x, target_y, target_z]) - np.array(dish_pos))
+                dist_to_dish = np.linalg.norm(
+                    np.array([target_x, target_y, target_z]) - np.array(dish_pos)
+                )
                 if dist_to_dish < 0.15:  # Within grasp range
                     # Wet dishes have higher slip probability
-                    if self.dish_properties[i]['is_wet']:
+                    if self.dish_properties[i]["is_wet"]:
                         slip_chance = self.slip_probability * 2.0  # Double for wet
                     else:
                         slip_chance = self.slip_probability
 
                     # Low care increases slip chance
-                    slip_chance *= (1.5 - self.current_care)  # 1.5x at care=0, 0.5x at care=1
+                    slip_chance *= (
+                        1.5 - self.current_care
+                    )  # 1.5x at care=0, 0.5x at care=1
 
                     if np.random.rand() < slip_chance:
                         is_error = True
-                        error_type = 'slip'
                         break
 
             # Channel 2: Random gripper failure
             if not is_error and np.random.rand() < self.gripper_failure_rate:
                 is_error = True
-                error_type = 'gripper_failure'
 
             # Channel 3: Contact force-based breaks
             if not is_error:
@@ -369,7 +382,6 @@ class DishwashingPhysicsEnv:
 
                         if max_force > break_threshold:
                             is_error = True
-                            error_type = 'harsh_contact'
                             break
 
             # Channel 4: Misalignment detection (position fell too far or rotated)
@@ -380,24 +392,23 @@ class DishwashingPhysicsEnv:
                     # Check if dish fell below threshold
                     if dish_pos[2] < -0.1:
                         is_error = True
-                        error_type = 'fell'
                         break
 
                     # Check lateral misalignment (dishes stacked too far from center)
-                    lateral_offset = np.sqrt(dish_pos[0]**2 + dish_pos[1]**2)
+                    lateral_offset = np.sqrt(dish_pos[0] ** 2 + dish_pos[1] ** 2)
                     if lateral_offset > 0.5:  # More than 50cm from center
                         is_error = True
-                        error_type = 'misalignment'
                         break
 
                     # Check tilt (using quaternion to detect if dish is too tilted)
                     # Simplified: check if z-component of up vector is too small
                     # (proper check would compute rotation matrix, but this is close enough)
                     euler = p.getEulerFromQuaternion(dish_orn)
-                    tilt_angle = np.sqrt(euler[0]**2 + euler[1]**2)  # Roll and pitch
+                    tilt_angle = np.sqrt(
+                        euler[0] ** 2 + euler[1] ** 2
+                    )  # Roll and pitch
                     if tilt_angle > np.pi / 6:  # More than 30 degrees tilt
                         is_error = True
-                        error_type = 'tilt'
                         break
 
             # Record outcome
@@ -418,13 +429,13 @@ class DishwashingPhysicsEnv:
 
         # Build info dict (same structure as DishwashingEnv)
         info = {
-            't': self.t,
-            'completed': self.completed,
-            'attempts': self.attempts,
-            'errors': self.errors,
-            'speed': self.current_speed,
-            'care': self.current_care,
-            'rate_per_min': (self.completed / max(1, self.t / 60.0))
+            "t": self.t,
+            "completed": self.completed,
+            "attempts": self.attempts,
+            "errors": self.errors,
+            "speed": self.current_speed,
+            "care": self.current_care,
+            "rate_per_min": (self.completed / max(1, self.t / 60.0)),
         }
 
         # Episode termination
@@ -445,23 +456,20 @@ class DishwashingPhysicsEnv:
             frame: (H, W, 3) uint8 RGB image
         """
         # Camera parameters
-        cam_pos = self.camera_config['position']
-        cam_target = self.camera_config['target']
-        cam_fov = self.camera_config['fov']
+        cam_pos = self.camera_config["position"]
+        cam_target = self.camera_config["target"]
+        cam_fov = self.camera_config["fov"]
 
         # Compute view and projection matrices
         view_matrix = p.computeViewMatrix(
             cameraEyePosition=cam_pos,
             cameraTargetPosition=cam_target,
-            cameraUpVector=[0, 0, 1]
+            cameraUpVector=[0, 0, 1],
         )
 
         aspect = self.image_width / self.image_height
         projection_matrix = p.computeProjectionMatrixFOV(
-            fov=cam_fov,
-            aspect=aspect,
-            nearVal=0.1,
-            farVal=5.0
+            fov=cam_fov, aspect=aspect, nearVal=0.1, farVal=5.0
         )
 
         # Render
@@ -470,7 +478,7 @@ class DishwashingPhysicsEnv:
             height=self.image_height,
             viewMatrix=view_matrix,
             projectionMatrix=projection_matrix,
-            renderer=p.ER_TINY_RENDERER  # Fast CPU renderer
+            renderer=p.ER_TINY_RENDERER,  # Fast CPU renderer
         )
 
         # Extract RGB (remove alpha channel)
@@ -499,10 +507,10 @@ class DishwashingPhysicsEnv:
     def get_state(self) -> Dict[str, Any]:
         """Get underlying state dict (for economics calculations)."""
         return {
-            't': self.t,
-            'completed': self.completed,
-            'attempts': self.attempts,
-            'errors': self.errors
+            "t": self.t,
+            "completed": self.completed,
+            "attempts": self.attempts,
+            "errors": self.errors,
         }
 
     def close(self):
@@ -528,9 +536,9 @@ def create_physics_env(config: dict):
         DishwashingPhysicsEnv instance
     """
     return DishwashingPhysicsEnv(
-        frames=config.get('frames', 8),
-        image_size=tuple(config.get('image_size', [64, 64])),
-        max_steps=config.get('max_steps', 60),
-        headless=config.get('headless', True),
-        camera_config=config.get('camera', None)
+        frames=config.get("frames", 8),
+        image_size=tuple(config.get("image_size", [64, 64])),
+        max_steps=config.get("max_steps", 60),
+        headless=config.get("headless", True),
+        camera_config=config.get("camera", None),
     )

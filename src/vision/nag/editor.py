@@ -18,6 +18,7 @@ import numpy as np
 try:
     import torch
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -80,14 +81,19 @@ def edit_texture_from_rgba(
 
     # Ray-plane intersection
     from src.vision.nag.renderer import ray_plane_intersection
-    hit_t, valid = ray_plane_intersection(ray_origins, ray_dirs, plane_origin, plane_normal)
+
+    hit_t, valid = ray_plane_intersection(
+        ray_origins, ray_dirs, plane_origin, plane_normal
+    )
 
     # Compute hit points
     hit_points = ray_origins + ray_dirs * hit_t.unsqueeze(-1)
 
     # Transform to plane-local coordinates
     plane_from_world = torch.inverse(pose)
-    hit_points_homo = torch.cat([hit_points, torch.ones_like(hit_points[..., :1])], dim=-1)
+    hit_points_homo = torch.cat(
+        [hit_points, torch.ones_like(hit_points[..., :1])], dim=-1
+    )
     hit_local = torch.einsum("ij,hwj->hwi", plane_from_world, hit_points_homo)[..., :3]
 
     # Convert to UV
@@ -225,10 +231,14 @@ def duplicate_node(
     offset_np = {}
     if "translation" in pose_offset:
         t = pose_offset["translation"]
-        offset_np["translation"] = t.cpu().numpy() if isinstance(t, torch.Tensor) else np.asarray(t)
+        offset_np["translation"] = (
+            t.cpu().numpy() if isinstance(t, torch.Tensor) else np.asarray(t)
+        )
     if "euler" in pose_offset:
         e = pose_offset["euler"]
-        offset_np["euler"] = e.cpu().numpy() if isinstance(e, torch.Tensor) else np.asarray(e)
+        offset_np["euler"] = (
+            e.cpu().numpy() if isinstance(e, torch.Tensor) else np.asarray(e)
+        )
 
     scene.clone_node(node_id, new_id, offset_np)
 
@@ -237,8 +247,10 @@ def duplicate_node(
         edit_type="duplicate",
         parameters={
             "source_node_id": str(node_id),
-            "translation_offset": offset_np.get("translation", [0, 0, 0]).tolist() if isinstance(offset_np.get("translation"), np.ndarray) else [0, 0, 0],
-            "euler_offset": offset_np.get("euler", [0, 0, 0]).tolist() if isinstance(offset_np.get("euler"), np.ndarray) else [0, 0, 0],
+            "translation_offset": np.asarray(
+                offset_np.get("translation", [0, 0, 0])
+            ).tolist(),
+            "euler_offset": np.asarray(offset_np.get("euler", [0, 0, 0])).tolist(),
         },
     )
 
@@ -369,6 +381,7 @@ class NAGEditPolicy:
         saturation_range: Range for saturation scale
         hue_range: Range for hue shift (radians)
     """
+
     prob_remove: float = 0.1
     prob_duplicate: float = 0.2
     prob_pose_shift: float = 0.3
@@ -396,7 +409,9 @@ class NAGEditPolicy:
             prob_duplicate=getattr(config, "prob_duplicate", cls.prob_duplicate),
             prob_pose_shift=getattr(config, "prob_pose_shift", cls.prob_pose_shift),
             prob_color_shift=getattr(config, "prob_color_shift", cls.prob_color_shift),
-            translation_range=getattr(config, "translation_range", cls.translation_range),
+            translation_range=getattr(
+                config, "translation_range", cls.translation_range
+            ),
             rotation_range=getattr(config, "rotation_range", cls.rotation_range),
             brightness_range=getattr(config, "brightness_range", cls.brightness_range),
             saturation_range=getattr(config, "saturation_range", cls.saturation_range),
@@ -440,7 +455,7 @@ def apply_random_edits(
     if rng is None:
         rng = np.random.default_rng(seed)  # seed=None gives non-deterministic
 
-    edits = []
+    edits: List[NAGEditVector] = []
 
     foreground_nodes = scene.get_foreground_nodes()
     if not foreground_nodes:
@@ -466,7 +481,9 @@ def apply_random_edits(
             delta_r = rng.uniform(*policy.rotation_range, size=3)
 
             edit = duplicate_node(
-                scene, node_id, new_id,
+                scene,
+                node_id,
+                new_id,
                 {
                     "translation": torch.from_numpy(delta_t.astype(np.float32)),
                     "euler": torch.from_numpy(delta_r.astype(np.float32)),
@@ -475,26 +492,37 @@ def apply_random_edits(
             foreground_nodes.append(new_id)
             edits.append(edit)
 
-        elif edit_roll < policy.prob_remove + policy.prob_duplicate + policy.prob_pose_shift:
+        elif (
+            edit_roll
+            < policy.prob_remove + policy.prob_duplicate + policy.prob_pose_shift
+        ):
             # Pose shift
             delta_t = rng.uniform(*policy.translation_range, size=3)
             delta_r = rng.uniform(*policy.rotation_range, size=3)
 
             edit = edit_pose(
-                scene, node_id,
+                scene,
+                node_id,
                 torch.from_numpy(delta_t.astype(np.float32)),
                 torch.from_numpy(delta_r.astype(np.float32)),
             )
             edits.append(edit)
 
-        elif edit_roll < policy.prob_remove + policy.prob_duplicate + policy.prob_pose_shift + policy.prob_color_shift:
+        elif (
+            edit_roll
+            < policy.prob_remove
+            + policy.prob_duplicate
+            + policy.prob_pose_shift
+            + policy.prob_color_shift
+        ):
             # Color shift with hue
             brightness = rng.uniform(*policy.brightness_range)
             saturation = rng.uniform(*policy.saturation_range)
             hue = rng.uniform(*policy.hue_range)
 
             edit = apply_color_shift(
-                scene, node_id,
+                scene,
+                node_id,
                 hue_shift=hue,
                 brightness_shift=brightness,
                 saturation_scale=saturation,

@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
 from src.evidence.preconditions import build_execution_preconditions
-from src.evidence.teacher_trace import build_teacher_provider_truth, infer_teacher_semantics
+from src.evidence.teacher_trace import (
+    build_teacher_provider_truth,
+    infer_teacher_semantics,
+)
 from src.utils.config_digest import sha256_json
 from src.utils.json_safe import to_json_safe
 
@@ -55,8 +58,12 @@ class TeacherAdapterContract:
         if isinstance(backend_status, Mapping):
             backend_selected = str(backend_status.get("backend_selected", "") or "")
             failure_reason = str(backend_status.get("failure_reason", "") or "")
-        backend_selected = backend_selected or str(metadata.get("backend_selected", "") or "")
-        failure_reason = failure_reason or str(metadata.get("availability_reason", "") or "")
+        backend_selected = backend_selected or str(
+            metadata.get("backend_selected", "") or ""
+        )
+        failure_reason = failure_reason or str(
+            metadata.get("availability_reason", "") or ""
+        )
         return build_teacher_provider_truth(
             provider_id=self.teacher_id,
             provider_name=self.model_name,
@@ -65,7 +72,9 @@ class TeacherAdapterContract:
             fallback_mode=failure_reason,
             confidence=1.0 if self.available else 0.0,
             metadata={
-                "vision_backbone_selected": str(metadata.get("vision_backbone_selected", "") or ""),
+                "vision_backbone_selected": str(
+                    metadata.get("vision_backbone_selected", "") or ""
+                ),
                 "backend_policy": str(metadata.get("backend_policy", "") or ""),
                 "failure_reason": failure_reason,
             },
@@ -113,13 +122,20 @@ class TeacherActionEnvelope:
             provider_id=self.teacher_id,
             provider_name=self.model_name,
             available=bool(self.available),
-            backend_selected=str(metadata.get("backend_selected", "") or ("real" if self.available else "unavailable")),
+            backend_selected=str(
+                metadata.get("backend_selected", "")
+                or ("real" if self.available else "unavailable")
+            ),
             fallback_mode=str(self.failure_mode or metadata.get("failure_reason", "")),
             confidence=float(self.confidence),
             metadata={
-                "vision_backbone_selected": str(metadata.get("vision_backbone_selected", "") or ""),
+                "vision_backbone_selected": str(
+                    metadata.get("vision_backbone_selected", "") or ""
+                ),
                 "backend_policy": str(metadata.get("backend_policy", "") or ""),
-                "failure_reason": str(metadata.get("failure_reason", "") or self.failure_mode),
+                "failure_reason": str(
+                    metadata.get("failure_reason", "") or self.failure_mode
+                ),
             },
         )
 
@@ -143,14 +159,17 @@ class TeacherActionEnvelope:
         }
 
     def to_vla_payload(self) -> Dict[str, Any]:
-        payload = _float_mapping(self.action)
+        payload: Dict[str, Any] = dict(_float_mapping(self.action))
         payload.update(
             {
                 "vla_available": bool(self.available),
                 "confidence": float(self.confidence),
                 "source": str(self.model_name),
                 "fallback_mode": str(
-                    self.failure_mode or ("teacher_available" if self.available else "teacher_unavailable")
+                    self.failure_mode
+                    or (
+                        "teacher_available" if self.available else "teacher_unavailable"
+                    )
                 ),
                 "semantic_tags": list(self.semantic_tags),
                 "object_refs": list(self.object_refs),
@@ -171,7 +190,9 @@ class TeacherActionEnvelope:
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> "TeacherActionEnvelope":
         resolved_metadata = _mapping(metadata)
-        semantic_bundle = infer_teacher_semantics(instruction=instruction, metadata=resolved_metadata)
+        semantic_bundle = infer_teacher_semantics(
+            instruction=instruction, metadata=resolved_metadata
+        )
         return cls(
             teacher_id=teacher_id,
             model_name=model_name,
@@ -189,7 +210,9 @@ class TeacherActionEnvelope:
                 provider_id=teacher_id,
                 provider_name=model_name,
                 available=False,
-                backend_selected=str(resolved_metadata.get("backend_selected", "") or "unavailable"),
+                backend_selected=str(
+                    resolved_metadata.get("backend_selected", "") or "unavailable"
+                ),
                 fallback_mode=failure_mode,
                 confidence=0.0,
                 metadata=resolved_metadata,
@@ -208,7 +231,9 @@ class TeacherActionEnvelope:
             failure_mode=str(payload.get("failure_mode", "")),
             semantic_tags=[str(tag) for tag in payload.get("semantic_tags", []) or []],
             object_refs=[str(tag) for tag in payload.get("object_refs", []) or []],
-            affordance_hints=[str(tag) for tag in payload.get("affordance_hints", []) or []],
+            affordance_hints=[
+                str(tag) for tag in payload.get("affordance_hints", []) or []
+            ],
             risk_hints=[str(tag) for tag in payload.get("risk_hints", []) or []],
             provenance=_mapping(payload.get("provenance")),
             metadata=_mapping(payload.get("metadata")),
@@ -235,7 +260,9 @@ class OpenVLATeacherRuntime:
                 "backend_policy": str(getattr(cfg, "backend_policy", "auto")),
                 "failure_reason": "",
                 "vision_backbone_selected": "",
-                "vision_backbone_policy": str(getattr(cfg, "vision_backbone_policy", "auto")),
+                "vision_backbone_policy": str(
+                    getattr(cfg, "vision_backbone_policy", "auto")
+                ),
             }
         )
         preconditions = build_execution_preconditions(
@@ -244,7 +271,8 @@ class OpenVLATeacherRuntime:
             artifact_refs={"model_name": model_name},
             signal_values={
                 "teacher_available": available,
-                "teacher_real_backend": str(backend_status.get("backend_selected", "")) == "real",
+                "teacher_real_backend": str(backend_status.get("backend_selected", ""))
+                == "real",
                 "advisory_only": True,
             },
             required_boolean_signals={"teacher_available": True},
@@ -274,7 +302,9 @@ class OpenVLATeacherRuntime:
                 fallback_mode=str(backend_status.get("failure_reason", "")),
                 confidence=1.0 if available else 0.0,
                 metadata={
-                    "vision_backbone_selected": str(backend_status.get("vision_backbone_selected", "")),
+                    "vision_backbone_selected": str(
+                        backend_status.get("vision_backbone_selected", "")
+                    ),
                     "backend_policy": str(backend_status.get("backend_policy", "")),
                     "failure_reason": str(backend_status.get("failure_reason", "")),
                 },
@@ -301,7 +331,10 @@ class OpenVLATeacherRuntime:
                 failure_mode=str(exc),
                 metadata={
                     "contract_id": contract.contract_id,
-                    "backend_selected": str(contract.provider_truth.get("backend_selected", "") or "unavailable"),
+                    "backend_selected": str(
+                        contract.provider_truth.get("backend_selected", "")
+                        or "unavailable"
+                    ),
                     "execution_preconditions": execution_preconditions.to_dict(),
                 },
             )
@@ -326,7 +359,10 @@ class OpenVLATeacherRuntime:
                     provider_id=contract.teacher_id,
                     provider_name=contract.model_name,
                     available=False,
-                    backend_selected=str(contract.provider_truth.get("backend_selected", "") or "unavailable"),
+                    backend_selected=str(
+                        contract.provider_truth.get("backend_selected", "")
+                        or "unavailable"
+                    ),
                     fallback_mode=str(exc),
                     confidence=0.0,
                     metadata={
@@ -342,7 +378,8 @@ class OpenVLATeacherRuntime:
             artifact_refs={"contract_id": contract.contract_id},
             signal_values={
                 "teacher_available": available,
-                "teacher_real_backend": str(payload.get("backend_selected", "")) == "real",
+                "teacher_real_backend": str(payload.get("backend_selected", ""))
+                == "real",
                 "confidence": float(payload.get("confidence", 0.0)),
             },
             required_boolean_signals={"teacher_available": True},
@@ -350,7 +387,9 @@ class OpenVLATeacherRuntime:
         )
         semantic_bundle = infer_teacher_semantics(
             instruction=instruction,
-            semantic_tags=payload.get("semantic_tags") if isinstance(payload, Mapping) else None,
+            semantic_tags=payload.get("semantic_tags")
+            if isinstance(payload, Mapping)
+            else None,
             action=payload if isinstance(payload, Mapping) else None,
             metadata=payload if isinstance(payload, Mapping) else None,
         )
@@ -361,7 +400,12 @@ class OpenVLATeacherRuntime:
             available=available,
             action=_float_mapping(payload),
             confidence=float(payload.get("confidence", 0.0)),
-            failure_mode=str(payload.get("fallback_mode", "teacher_available" if available else "teacher_unavailable")),
+            failure_mode=str(
+                payload.get(
+                    "fallback_mode",
+                    "teacher_available" if available else "teacher_unavailable",
+                )
+            ),
             semantic_tags=semantic_bundle["semantic_tags"],
             object_refs=semantic_bundle["object_refs"],
             affordance_hints=semantic_bundle["affordance_hints"],
@@ -373,11 +417,17 @@ class OpenVLATeacherRuntime:
             metadata={
                 "available": available,
                 "backend_selected": str(
-                    payload.get("backend_selected", "real" if available else "unavailable")
+                    payload.get(
+                        "backend_selected", "real" if available else "unavailable"
+                    )
                 ),
                 "backend_policy": str(payload.get("backend_policy", "")),
-                "vision_backbone_selected": str(payload.get("vision_backbone_selected", "")),
-                "vision_backbone_policy": str(payload.get("vision_backbone_policy", "")),
+                "vision_backbone_selected": str(
+                    payload.get("vision_backbone_selected", "")
+                ),
+                "vision_backbone_policy": str(
+                    payload.get("vision_backbone_policy", "")
+                ),
                 "failure_reason": str(payload.get("failure_reason", "")),
                 "semantic_summary": semantic_bundle,
                 "execution_preconditions": execution_preconditions.to_dict(),
@@ -386,11 +436,19 @@ class OpenVLATeacherRuntime:
                 provider_id=contract.teacher_id,
                 provider_name=contract.model_name,
                 available=available,
-                backend_selected=str(payload.get("backend_selected", "real" if available else "unavailable")),
-                fallback_mode=str(payload.get("failure_reason", payload.get("fallback_mode", ""))),
+                backend_selected=str(
+                    payload.get(
+                        "backend_selected", "real" if available else "unavailable"
+                    )
+                ),
+                fallback_mode=str(
+                    payload.get("failure_reason", payload.get("fallback_mode", ""))
+                ),
                 confidence=float(payload.get("confidence", 0.0)),
                 metadata={
-                    "vision_backbone_selected": str(payload.get("vision_backbone_selected", "")),
+                    "vision_backbone_selected": str(
+                        payload.get("vision_backbone_selected", "")
+                    ),
                     "backend_policy": str(payload.get("backend_policy", "")),
                     "failure_reason": str(payload.get("failure_reason", "")),
                     "contract_id": contract.contract_id,
@@ -399,7 +457,9 @@ class OpenVLATeacherRuntime:
         )
 
 
-def save_teacher_adapter_contract_json(path: Path, contract: TeacherAdapterContract) -> None:
+def save_teacher_adapter_contract_json(
+    path: Path, contract: TeacherAdapterContract
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(contract.to_dict(), indent=2))
 
@@ -412,14 +472,18 @@ def load_teacher_adapter_contract_json(path: Path) -> TeacherAdapterContract:
         modality=str(payload.get("modality", "")),
         advisory_only=bool(payload.get("advisory_only", True)),
         available=bool(payload.get("available", False)),
-        action_schema_id=str(payload.get("action_schema_id", "teacher_action_envelope_v1")),
+        action_schema_id=str(
+            payload.get("action_schema_id", "teacher_action_envelope_v1")
+        ),
         metadata=_mapping(payload.get("metadata")),
         provider_truth=_mapping(payload.get("provider_truth")),
         version=str(payload.get("version", "teacher_adapter_contract_v1")),
     )
 
 
-def save_teacher_action_envelope_json(path: Path, envelope: TeacherActionEnvelope) -> None:
+def save_teacher_action_envelope_json(
+    path: Path, envelope: TeacherActionEnvelope
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(envelope.to_dict(), indent=2))
 

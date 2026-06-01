@@ -3,6 +3,7 @@ Scene IR Tracker.
 
 Main tracker class orchestrating SAM3D adapters, IR refinement, and Kalman tracking.
 """
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +13,7 @@ import numpy as np
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore
@@ -145,11 +147,17 @@ class SceneIRTracker:
 
             # Get masks for this frame
             frame_masks = instance_masks[t] if t < len(instance_masks) else {}
-            frame_labels = class_labels[t] if class_labels and t < len(class_labels) else {}
-            frame_object_refs = object_refs[t] if object_refs and t < len(object_refs) else {}
+            frame_labels = (
+                class_labels[t] if class_labels and t < len(class_labels) else {}
+            )
+            frame_object_refs = (
+                object_refs[t] if object_refs and t < len(object_refs) else {}
+            )
             frame_kpts = keypoints[t] if keypoints and t < len(keypoints) else {}
             point_map = point_maps[t] if point_maps and t < len(point_maps) else None
-            depth_frame = depth_frames[t] if depth_frames and t < len(depth_frames) else None
+            depth_frame = (
+                depth_frames[t] if depth_frames and t < len(depth_frames) else None
+            )
             if point_map is None and depth_frame is not None:
                 point_map = self._point_map_from_depth(depth_frame, camera, t)
 
@@ -167,7 +175,11 @@ class SceneIRTracker:
             )
 
             # Run IR refinement
-            if entities and TORCH_AVAILABLE and not self.config.zero_inference_passthrough:
+            if (
+                entities
+                and TORCH_AVAILABLE
+                and not self.config.zero_inference_passthrough
+            ):
                 refined_entities, refine_result = self._refine_frame(
                     entities,
                     frame_float,
@@ -235,7 +247,9 @@ class SceneIRTracker:
             kpts = keypoints.get(instance_id)
 
             # Determine if body or object
-            is_body = class_name.lower() in ("person", "human", "body") or kpts is not None
+            is_body = (
+                class_name.lower() in ("person", "human", "body") or kpts is not None
+            )
 
             if is_body:
                 entity = self._reconstruct_body(
@@ -497,7 +511,9 @@ class SceneIRTracker:
             "body_adapter_passthrough": False,
             "no_inference_backend": False,
             "deterministic_backend": False,
-            "overall_mode": "real" if object_mode == "real" and body_mode == "real" else "degraded",
+            "overall_mode": "real"
+            if object_mode == "real" and body_mode == "real"
+            else "degraded",
         }
 
     def _point_map_from_depth(
@@ -514,7 +530,10 @@ class SceneIRTracker:
                 f"Depth frame shape {depth.shape[:2]} does not match camera resolution "
                 f"{(int(camera.height), int(camera.width))}"
             )
-        u, v = np.meshgrid(np.arange(camera.width, dtype=np.float32), np.arange(camera.height, dtype=np.float32))
+        u, v = np.meshgrid(
+            np.arange(camera.width, dtype=np.float32),
+            np.arange(camera.height, dtype=np.float32),
+        )
         z = np.where(np.isfinite(depth) & (depth > 1e-6), depth, 0.0)
         x = ((u - float(camera.cx)) / max(float(camera.fx), 1e-6)) * z
         y = ((v - float(camera.cy)) / max(float(camera.fy), 1e-6)) * z
@@ -544,7 +563,9 @@ class SceneIRTracker:
         points_cam = points_cam.copy()
         points_cam[:, 2] *= -1.0
         world_from_cam = np.asarray(
-            camera.world_from_cam[min(max(frame_index, 0), camera.world_from_cam.shape[0] - 1)],
+            camera.world_from_cam[
+                min(max(frame_index, 0), camera.world_from_cam.shape[0] - 1)
+            ],
             dtype=np.float32,
         )
         ones = np.ones((points_cam.shape[0], 1), dtype=np.float32)
@@ -567,10 +588,10 @@ class SceneIRTracker:
         x_cam = (u - float(camera.cx)) / max(float(camera.fx), 1e-6)
         y_cam = (v - float(camera.cy)) / max(float(camera.fy), 1e-6)
         ray_cam = np.array([x_cam, y_cam, 1.0], dtype=np.float32)
-        ray_cam /= max(np.linalg.norm(ray_cam), 1e-6)
+        ray_cam /= max(float(np.linalg.norm(ray_cam)), 1e-6)
         world_from_cam = np.asarray(camera.world_from_cam[t], dtype=np.float32)
         ray_world = world_from_cam[:3, :3] @ ray_cam
-        ray_world /= max(np.linalg.norm(ray_world), 1e-6)
+        ray_world /= max(float(np.linalg.norm(ray_world)), 1e-6)
         default_depth = 1.5
         return (cam_pos + ray_world * default_depth).astype(np.float32)
 
@@ -601,13 +622,19 @@ class SceneIRTracker:
         )
         pose = np.eye(4, dtype=np.float32)
         if world_points.size == 0:
-            pose[:3, 3] = self._default_world_center_from_mask(mask, camera, frame_index)
+            pose[:3, 3] = self._default_world_center_from_mask(
+                mask, camera, frame_index
+            )
             return pose, self._default_scale_from_mask(mask, camera), 0
 
         center = np.mean(world_points, axis=0).astype(np.float32)
-        extent = np.ptp(world_points, axis=0) if world_points.shape[0] > 1 else np.zeros(3, dtype=np.float32)
+        extent = (
+            np.ptp(world_points, axis=0)
+            if world_points.shape[0] > 1
+            else np.zeros(3, dtype=np.float32)
+        )
         fallback_scale = self._default_scale_from_mask(mask, camera)
-        scale = float(max(np.linalg.norm(extent), fallback_scale, 0.02))
+        scale = float(max(float(np.linalg.norm(extent)), fallback_scale, 0.02))
         pose[:3, 3] = center
         return pose, scale, int(world_points.shape[0])
 
@@ -634,8 +661,16 @@ class SceneIRTracker:
             frame_index=frame_index,
         )
         ys, xs = np.where(mask)
-        bbox = [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())] if len(xs) else [0, 0, 0, 0]
-        label_source = "explicit_segmentation_map" if object_ref else "segmentation_mask_passthrough"
+        bbox = (
+            [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
+            if len(xs)
+            else [0, 0, 0, 0]
+        )
+        label_source = (
+            "explicit_segmentation_map"
+            if object_ref
+            else "segmentation_mask_passthrough"
+        )
         return SceneEntity3D(
             entity_type="object",
             track_id=instance_id,
@@ -648,7 +683,9 @@ class SceneIRTracker:
                 "point_count": int(point_count),
                 "bbox_xyxy": bbox,
             },
-            visibility=float(min(1.0, max(np.count_nonzero(mask) / max(mask.size, 1), 0.01))),
+            visibility=float(
+                min(1.0, max(np.count_nonzero(mask) / max(mask.size, 1), 0.01))
+            ),
             occlusion_score=0.0,
             source_instance_id=instance_id,
             source_object_id=object_ref or None,
@@ -679,9 +716,19 @@ class SceneIRTracker:
         )
         pelvis = pose[:3, 3].copy()
         joints_3d = {"pelvis": pelvis}
-        if keypoints is not None and np.asarray(keypoints).ndim >= 2 and np.asarray(keypoints).shape[0] > 0:
-            joints_3d["head"] = pelvis + np.array([0.0, 0.0, max(scale * 0.5, 0.1)], dtype=np.float32)
-        label_source = "explicit_segmentation_map" if object_ref else "segmentation_mask_passthrough"
+        if (
+            keypoints is not None
+            and np.asarray(keypoints).ndim >= 2
+            and np.asarray(keypoints).shape[0] > 0
+        ):
+            joints_3d["head"] = pelvis + np.array(
+                [0.0, 0.0, max(scale * 0.5, 0.1)], dtype=np.float32
+            )
+        label_source = (
+            "explicit_segmentation_map"
+            if object_ref
+            else "segmentation_mask_passthrough"
+        )
         return SceneEntity3D(
             entity_type="body",
             track_id=instance_id,
@@ -694,7 +741,9 @@ class SceneIRTracker:
                 "point_count": int(point_count),
             },
             joints_3d=joints_3d,
-            visibility=float(min(1.0, max(np.count_nonzero(mask) / max(mask.size, 1), 0.01))),
+            visibility=float(
+                min(1.0, max(np.count_nonzero(mask) / max(mask.size, 1), 0.01))
+            ),
             occlusion_score=0.0,
             source_instance_id=instance_id,
             source_object_id=object_ref or None,

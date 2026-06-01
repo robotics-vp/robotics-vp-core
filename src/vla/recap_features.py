@@ -1,11 +1,11 @@
 """
 Shared RECAP feature utilities for training/inference.
 """
+
 import json
 import random
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -27,11 +27,19 @@ def load_recap_jsonl(paths: List[str]) -> List[Dict]:
                     continue
                 records.append(json.loads(line))
     # Deterministic ordering by (episode_id, timestep, sampler_strategy)
-    records.sort(key=lambda r: (r.get("episode_id", ""), r.get("timestep", 0), r.get("sampler_strategy") or ""))
+    records.sort(
+        key=lambda r: (
+            r.get("episode_id", ""),
+            r.get("timestep", 0),
+            r.get("sampler_strategy") or "",
+        )
+    )
     return records
 
 
-def infer_metrics(records: List[Dict], override: List[str] = None) -> List[str]:
+def infer_metrics(
+    records: List[Dict], override: Optional[List[str]] = None
+) -> List[str]:
     if override:
         return list(override)
     metrics = set()
@@ -41,11 +49,12 @@ def infer_metrics(records: List[Dict], override: List[str] = None) -> List[str]:
 
 
 def collect_categories(records: List[Dict], field: str) -> List[str]:
-    vals = sorted({rec.get(field) for rec in records if rec.get(field) is not None})
-    return [str(v) for v in vals]
+    return sorted(str(rec.get(field)) for rec in records if rec.get(field) is not None)
 
 
-def compute_metric_stats(records: List[Dict], metrics: List[str]) -> Dict[str, Dict[str, float]]:
+def compute_metric_stats(
+    records: List[Dict], metrics: List[str]
+) -> Dict[str, Dict[str, float]]:
     stats: Dict[str, Dict[str, float]] = {}
     for m in metrics:
         vals = [float((rec.get("metrics", {}) or {}).get(m, 0.0)) for rec in records]
@@ -76,9 +85,9 @@ def build_feature_vector(
     for field, cats in categories.items():
         one_hot = [0.0] * len(cats)
         if cats:
-            val = rec.get(field)
-            if val is not None and str(val) in cats:
-                idx = cats.index(str(val))
+            category_value = rec.get(field)
+            if category_value is not None and str(category_value) in cats:
+                idx = cats.index(str(category_value))
                 one_hot[idx] = 1.0
         features.extend(one_hot)
     return features
