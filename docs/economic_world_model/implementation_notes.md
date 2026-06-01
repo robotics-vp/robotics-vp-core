@@ -6341,3 +6341,56 @@ This tranche makes G1 the primary target across doctrine, defaults, SAC
 metadata, hygiene gates, and RunPod launch intent. It does not launch a pod,
 execute a provider, run GPU training, prove G1 simulation, operate Unitree
 hardware, write weights, or promote anything.
+
+## 2026-06-01 — WM subsystem debt sweep
+
+### What changed
+
+- Added `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`.
+- The document records:
+  - current audit and hygiene command results
+  - broad ruff and mypy counts
+  - RunPod local prerequisite blockers
+  - subsystem debt tables for each major WM
+  - implementation status for the bio/neuro doctrine items
+  - ranked next-session work with verification commands
+
+### Current receipts
+
+Commands:
+
+```bash
+python3 scripts/economic_world_model/nightly_audit.py \
+  --output-json /tmp/nightly_audit_post_g1.json \
+  --output-markdown /tmp/nightly_audit_post_g1.md
+
+python3 scripts/economic_world_model/check_wm_surface_hygiene.py \
+  --output-dir /tmp/wm_surface_hygiene_debt_doc
+
+python3 scripts/economic_world_model/check_g1_primary_env_hygiene.py \
+  --output-dir /tmp/g1_primary_env_hygiene_debt_doc
+
+python3 scripts/economic_world_model/check_gpu_run_hygiene.py \
+  --manifest-dir configs/runpod/examples \
+  --output-dir /tmp/gpu_run_hygiene_g1
+```
+
+Results:
+
+- nightly audit: `status=ok`
+- WM surface hygiene: `status=ok_wm_surface_hygiene_passed`
+- G1 primary hygiene: `status=ok_g1_primary_env_hygiene_passed`
+- GPU run hygiene: `status=ok_gpu_run_hygiene_passed`
+
+Additional debt scans:
+
+- broad ruff: 289 issues
+- broad mypy: 413 errors
+- RunPod local prerequisites: blocked by missing `runpodctl`, unset
+  `RUNPOD_API_KEY`, and unset `RUNPOD_VOLUME_ID`
+
+### Boundary
+
+This is a repo audit document only. It does not fix the listed debt, launch
+pods, run providers, train models, operate hardware, mutate reward math, or
+grant promotion/authority.

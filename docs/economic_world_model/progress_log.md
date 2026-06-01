@@ -4145,3 +4145,26 @@ Verification for the Phase-5.1 pass:
   validation only. It does not launch pods, run providers, run GPU loops, train
   G1 whole-body policies, operate Unitree hardware, write stable checkpoints, or
   create promotion-grade proof.
+
+### 2026-06-01: WM subsystem debt sweep
+
+- Added `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`,
+  a subsystem-by-subsystem debt ledger across Sim/Synth/Physics,
+  Perception/Grounding, Embodiment/Actuation and humanoid readiness, Economic
+  WM, Transport/Semantic runtime, Phase 6.5, and Phase 7.
+- Current sweep receipts:
+  - nightly audit: `status=ok`, no safe automatic additive task detected
+  - WM surface hygiene: `status=ok_wm_surface_hygiene_passed`,
+    `blocking_issue_count=0`
+  - G1 primary hygiene: `status=ok_g1_primary_env_hygiene_passed`,
+    `legacy_primary_claim_count=0`
+  - GPU run hygiene: `status=ok_gpu_run_hygiene_passed`,
+    `safe_to_queue_count=3`
+- Debt recorded for the next session:
+  - broad ruff still reports 289 issues
+  - broad mypy still reports 413 errors
+  - RunPod is manifest-ready but launch-blocked locally by missing
+    `runpodctl`, `RUNPOD_API_KEY`, and `RUNPOD_VOLUME_ID`
+- Boundary preserved: this is an audit and next-session worklist. It does not
+  run providers, launch pods, train models, operate hardware, or change any
+  promotion/authority gate.
