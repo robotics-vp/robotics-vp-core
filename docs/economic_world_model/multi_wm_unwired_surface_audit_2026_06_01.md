@@ -44,13 +44,15 @@ Observed results:
 
 ## Current Local Queue Ownership
 
-After the support-surface static debt burn-down through policies, the current
+After the full-repo static debt burn-down, the current
 local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
-sweep now owns the live ordering for remaining local work: full-repo mypy/ruff
-cleanup starting with `src/datasets/`, `src/phase_h/`, and the remaining
-one-error support surfaces, provider bring-up readiness ledger, bio/neuro
-receipt joins, bounded Phase 7 receipt consumption, and script/smoke hygiene.
+sweep now owns the live ordering for remaining local work: keep full-repo
+`mypy src/` and `ruff check .` green, then implement the provider bring-up
+readiness ledger, Unitree rosbag2/MCAP unavailable receipts, LeRobot
+video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
+Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
+bio/neuro receipt joins, and bounded Phase 7 receipt consumption.
 Externally blocked provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and
 promotion-grade proof items remain blockers rather than local implementation
 claims.
@@ -222,13 +224,12 @@ Do not:
 
 ## Ranked Next Local Actions
 
-### 1. Burn down subsystem static debt
+### 1. Keep subsystem static debt clean
 
-- **What**: execute the ranked work in
-  `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`, starting
-  with `src/datasets/`, `src/phase_h/`, and the remaining one-error support
-  surfaces after the support-surface static pass through `src/physics`.
-- **Why now**: it removes noise before GPU/provider sessions.
+- **What**: keep the now-clean full-repo static surface green after each local
+  wiring tranche.
+- **Why now**: it prevents local noise from hiding real GPU/provider/hardware
+  blockers.
 - **Unblocks**: cleaner RunPod bring-up and loop/debug sessions.
 - **Verify**: `python3 -m ruff check .`; `python3 -m mypy src/`
 - **Do NOT**: change routing semantics while doing type cleanup.

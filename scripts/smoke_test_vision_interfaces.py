@@ -44,7 +44,7 @@ def main():
     # Isaac stub frame
     stub = IsaacStubBackend()
     frame_stub = stub.build_vision_frame(task_id="task_vis", episode_id="ep_vis", timestep=1)
-    latent_stub = vision_encoder.encode(frame_stub)
+    vision_encoder.encode(frame_stub)
     obs_stub = builder.build(frame_stub, stub.get_state_summary())
     rt_stub = PolicyObservation.from_dict(obs_stub.to_dict())
     assert rt_stub.to_dict() == obs_stub.to_dict()

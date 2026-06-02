@@ -7,7 +7,7 @@ vector scene generation, visual style, and behaviour simulation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 import json
 
 from src.vision.motion_hierarchy.config import MotionHierarchyConfig

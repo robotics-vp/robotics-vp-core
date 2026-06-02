@@ -9,7 +9,7 @@ These are wired into DataPackMeta for tracking which objectives were used,
 but do NOT affect Phase B reward shaping yet - just logging and schema.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
 

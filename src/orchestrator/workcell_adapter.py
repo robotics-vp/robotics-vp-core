@@ -14,7 +14,6 @@ from typing import Any, Dict, Optional, Union
 from src.envs.workcell_env.compiler import (
     CompilationResult,
     WorkcellTaskCompiler,
-    compile_workcell_task,
 )
 from src.envs.workcell_env.config import WorkcellEnvConfig
 from src.envs.workcell_env.scene.scene_spec import WorkcellSceneSpec
@@ -151,7 +150,7 @@ class WorkcellOrchestrationAdapter:
         if capture_rollout and hasattr(env, "get_episode_log"):
             episode_log = env.get_episode_log()
             # Would integrate with rollout_capture here
-            logger.debug("Episode log captured with %d steps", steps)
+            logger.debug("Episode log captured with %d steps: %s", steps, type(episode_log).__name__)
 
         env.close()
 

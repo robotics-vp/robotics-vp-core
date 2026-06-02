@@ -6,6 +6,8 @@ Tests are skipped if dependencies or weights are not available.
 """
 from __future__ import annotations
 
+import importlib.util
+
 import numpy as np
 import pytest
 
@@ -25,11 +27,7 @@ SAM3D_OBJECTS_AVAILABLE = _check_wrapper_available("sam3d_objects_wrapper", "SAM
 SAM3D_BODY_AVAILABLE = _check_wrapper_available("sam3d_body_wrapper", "SAM3DBodyInference")
 LPIPS_AVAILABLE = _check_wrapper_available("lpips_wrapper", "LPIPSLoss")
 
-try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
 @pytest.fixture

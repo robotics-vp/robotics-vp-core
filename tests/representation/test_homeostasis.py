@@ -188,7 +188,7 @@ class TestHomeostaticController:
         bundle1 = SignalBundle(
             signals=[ControlSignal(SignalType.EPIPLEXITY, value=0.5)]
         )
-        plan1 = controller.step(bundle1)
+        controller.step(bundle1)
 
         # Second step with drastically different epiplexity
         bundle2 = SignalBundle(

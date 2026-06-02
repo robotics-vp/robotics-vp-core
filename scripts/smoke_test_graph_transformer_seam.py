@@ -227,7 +227,7 @@ def main() -> None:
           f"{artifact['receipts']['validation_count']} val, "
           f"{artifact['receipts']['benchmark_count']} benchmark")
     print(f"  Elapsed:        {artifact['elapsed_seconds']}s")
-    print(f"  Artifact:       artifacts/graph_transformer_seam_proof_of_life.json")
+    print("  Artifact:       artifacts/graph_transformer_seam_proof_of_life.json")
     print("=" * 60)
 
 

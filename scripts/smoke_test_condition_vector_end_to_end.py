@@ -61,7 +61,9 @@ class StubEconVector:
 
 
 def _build_adapter(use_condition_vector: bool) -> ObservationAdapter:
-    trust_loader = lambda: {"fragile": {"trust_score": 0.8}, "frontier": {"trust_score": 0.7}}
+    def trust_loader():
+        return {"fragile": {"trust_score": 0.8}, "frontier": {"trust_score": 0.7}}
+
     adapter_cfg = {"use_condition_vector": use_condition_vector, "condition_vector": {"skill_mode_order": ["frontier_exploration", "safety_critical", "efficiency_throughput", "recovery_heavy", "default"]}}
     return ObservationAdapter(policy_registry=None, trust_matrix_loader=trust_loader, recap_loader=None, config=adapter_cfg)
 

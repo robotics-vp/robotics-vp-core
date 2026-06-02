@@ -7043,3 +7043,60 @@ providers, download weights, launch pods, train models, write weights, operate
 Unitree or other hardware, publish ROS2, write SDK2 commands, mutate frozen
 Phase B math, change reward/controller equations, change physical constants,
 grant Phase 7 authority, or claim promotion-grade evidence.
+
+## 2026-06-02 — Full-repo static hygiene clean
+
+### What changed
+
+- Cleared the remaining full-repo mypy surface:
+  `src/datasets`, `src/phase_h`, deployment/economics receipt parsing,
+  geometry graph literal narrowing, energy profile policy return typing,
+  LeRobot-perception adapter config defaults, CtRL-Sim callable typing,
+  objective tensor normalization typing, profile-net econ params narrowing,
+  ROS TF-tree annotations, and shadow-runtime numeric episode-log metrics.
+- Cleared the remaining full-repo ruff surface:
+  `F821` undefined names, safe unused imports/locals, lambda assignments,
+  ambiguous loop variables, one-line style issues, and a bare exception in old
+  scripts/tests.
+- Kept scripts working rather than deleting them. `scripts/train_spatial_rnn.py`
+  now has a local `save_checkpoint` helper so the script is executable when
+  explicitly run, but this tranche did not execute training or write weights.
+- Updated the subsystem debt sweep and unwired audit so the next queue starts
+  from local wiring/audit work rather than static cleanup.
+
+### Current receipts
+
+```bash
+python3 -m mypy src/ --show-error-codes --no-error-summary
+python3 -m ruff check .
+python3 -m compileall src scripts tests -q
+python3 -m pytest -q \
+  tests/process_reward \
+  tests/analytics/test_combined_curriculum.py \
+  tests/representation/test_homeostasis.py \
+  tests/test_causal_replay_integration.py \
+  tests/test_lsd_vector_scene_env.py \
+  tests/vision/scene_ir_tracker/test_upstream_integration.py \
+  tests/test_dataset_bridges.py
+python3 scripts/smoke_test_condition_vector_end_to_end.py
+python3 scripts/smoke_test_tfd_vision_chain.py
+python3 scripts/smoke_test_econ_correlator_impl.py
+python3 scripts/smoke_test_vision_interfaces.py
+python3 scripts/run_scene_ir_eval.py --help
+python3 scripts/train_spatial_rnn.py --help
+```
+
+Focused pytest result: `113 passed, 20 warnings`.
+
+Residual full-repo scans after this pass:
+
+- broad mypy: `0` `error:` records
+- broad ruff: `0` issues
+
+### Boundary
+
+This tranche is local typed/static/script/test hygiene only. It does not run
+providers, download weights, launch pods, train models, write weights, operate
+Unitree or other hardware, publish ROS2, write SDK2 commands, mutate frozen
+Phase B math, change reward/controller equations, change physical constants,
+grant Phase 7 authority, or claim promotion-grade evidence.

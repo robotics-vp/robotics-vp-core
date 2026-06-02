@@ -167,7 +167,7 @@ class TestKitchenLayout:
         return LSDVectorSceneEnv(config)
 
     def test_kitchen_reset(self, env):
-        obs = env.reset()
+        env.reset()
         assert env.graph is not None
         # Kitchen should have kitchen zone node
         kitchen_nodes = [n for n in env.graph.nodes if "KITCHEN" in str(n.node_type)]

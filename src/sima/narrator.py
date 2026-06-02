@@ -100,10 +100,7 @@ class Narrator:
         Returns:
             narration: str
         """
-        ee_pos = obs[0:3]
-        ee_vel = obs[3:6]
         drawer_frac = obs[6]
-        vase_pos = obs[7:10]
         min_clearance = obs[11]
 
         # Analyze action direction

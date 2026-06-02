@@ -581,7 +581,7 @@ def main(runner=None):
     if runner:
         runner.start_training()
 
-    results = run_offline_experiment(
+    run_offline_experiment(
         real_data_path=args.real,
         synthetic_data_path=args.synthetic,
         synthetic_ratio=args.synthetic_ratio,
@@ -610,4 +610,3 @@ def main(runner=None):
 
 if __name__ == '__main__':
     main()
-

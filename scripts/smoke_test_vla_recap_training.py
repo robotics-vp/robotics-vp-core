@@ -69,7 +69,7 @@ def main():
     history = run_out["history"]
     assert len(history) == 2
     losses = [h["total_loss"] for h in history]
-    assert all(math.isfinite(l) for l in losses)
+    assert all(math.isfinite(loss) for loss in losses)
     assert losses[-1] <= losses[0] * 1.1, "Loss did not improve sufficiently."
     ckpt_path = Path(run_out["checkpoint"])
     assert ckpt_path.exists(), "Checkpoint missing."

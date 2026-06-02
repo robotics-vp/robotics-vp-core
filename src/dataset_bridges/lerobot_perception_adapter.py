@@ -35,7 +35,7 @@ Production training requires frozen backbone feature extraction.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 import torch
@@ -582,7 +582,7 @@ class LeRobotPerceptionAdapterConfig:
     """Configuration for LeRobot → perception seam data adaptation."""
 
     # Feature extraction
-    feature_config: FeatureExtractionConfig = None
+    feature_config: FeatureExtractionConfig = field(default_factory=FeatureExtractionConfig)
 
     # Multi-provider sampling
     camera_keys: Optional[List[str]] = None
@@ -601,8 +601,7 @@ class LeRobotPerceptionAdapterConfig:
     projection_tokens_per_camera: int = 4
 
     def __post_init__(self):
-        if self.feature_config is None:
-            self.feature_config = FeatureExtractionConfig()
+        pass
 
 
 def adapt_lerobot_episodes_for_evidence_fusion(

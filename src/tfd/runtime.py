@@ -5,7 +5,7 @@ Maintains active set of instructions over time with deterministic conflict resol
 Per TEXT_FRONT_DOOR_COMPLETE_SEMANTICS.md.
 """
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from src.tfd.compiler import TFDInstruction, TextFrontDoor

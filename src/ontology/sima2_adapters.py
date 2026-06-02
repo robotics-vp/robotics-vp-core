@@ -4,7 +4,7 @@ Adapters to import SIMA-2 rollouts/semantic tags into ontology datapacks.
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from src.sima2.config import extract_provenance
 from src.ontology.models import Datapack

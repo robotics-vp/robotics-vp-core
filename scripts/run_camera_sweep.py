@@ -24,15 +24,15 @@ def run_sweep(args):
     print(f"[CameraSweep] Starting sweep for task: {args.task_id}")
     
     # Setup PyBullet
-    client = pybullet.connect(pybullet.GUI if args.render else pybullet.DIRECT)
+    pybullet.connect(pybullet.GUI if args.render else pybullet.DIRECT)
     pybullet.setAdditionalSearchPath(pybullet_data.getDataPath())
     pybullet.setGravity(0, 0, -9.8)
     
     # Load plane and robot (stub)
-    plane = pybullet.loadURDF("plane.urdf")
+    pybullet.loadURDF("plane.urdf")
     # In a real scenario, we'd load the robot and task environment here
     # For this script, we just visualize a simple scene
-    cube = pybullet.loadURDF("cube.urdf", [0, 0, 0.5])
+    pybullet.loadURDF("cube.urdf", [0, 0, 0.5])
     
     # Camera settings
     width, height = 640, 480

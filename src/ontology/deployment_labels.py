@@ -69,6 +69,7 @@ class DeploymentOutcomeLabel:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "DeploymentOutcomeLabel":
+        realized_reward = payload.get("realized_reward")
         return cls(
             schema_version=str(payload.get("schema_version", "deployment_outcome_label_v1")),
             run_id=str(payload.get("run_id", "")),
@@ -82,8 +83,8 @@ class DeploymentOutcomeLabel:
             task_success=payload.get("task_success"),
             objective_satisfied=payload.get("objective_satisfied"),
             realized_reward=(
-                float(payload.get("realized_reward"))
-                if payload.get("realized_reward") is not None
+                float(realized_reward)
+                if realized_reward is not None
                 else None
             ),
             failure_events=[str(value) for value in payload.get("failure_events", []) or []],

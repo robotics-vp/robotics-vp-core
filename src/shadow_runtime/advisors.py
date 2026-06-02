@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import torch
 
@@ -14,7 +14,6 @@ from src.learning.regal_support_models import RegalSupportModel, predict_regal_s
 from src.learning.replay_policy_trainer import load_policy_checkpoint
 from src.replay.schema import ReplayEpisodeRecord, ReplayStepRecord
 from src.regality.promotion_policy import PromotionMetrics, RegalPromotionPolicy
-from src.utils.config_digest import sha256_json
 
 
 class AdvisorMode(str, Enum):

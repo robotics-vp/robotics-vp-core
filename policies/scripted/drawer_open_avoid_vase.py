@@ -63,11 +63,8 @@ class DrawerOpenAvoidVasePolicy:
 
         # Parse observation
         ee_pos = obs[0:3]
-        ee_vel = obs[3:6]
         drawer_frac = obs[6]
         vase_pos = obs[7:10]
-        vase_upright = obs[10]
-        min_clearance = obs[11]
         grasp_state = obs[12]
 
         self.step_count += 1

@@ -5,7 +5,7 @@ Deterministic regex-only parser for 10 InstructionTypes as specified in
 TEXT_FRONT_DOOR_COMPLETE_SEMANTICS.md.
 """
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Pattern, Tuple
 

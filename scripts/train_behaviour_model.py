@@ -360,7 +360,6 @@ def train_epoch(
 
         action_tokens = batch["action_tokens"]
         condition = batch["condition"]
-        seq_lens = batch["seq_len"]
 
         # Forward pass
         logits = model(action_tokens[:, :-1], condition)  # Predict next token

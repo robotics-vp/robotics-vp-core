@@ -170,8 +170,6 @@ def compute_weights_mode3(synth_transitions, w_econ_model, lambda_ctrl, profile,
     # Build feature vector for lambda controller
     # Use aggregate statistics from synthetic transitions
     trust_mean = np.mean([t['trust'] for t in synth_transitions])
-    delta_mpl_mean = np.mean([t['delta_mpl'] for t in synth_transitions])
-    delta_error_mean = np.mean([t['delta_error'] for t in synth_transitions])
 
     # Baseline metrics (from profile or defaults)
     baseline_mpl = 50.0
@@ -458,7 +456,6 @@ def run_ab_test():
     # Determine verdict
     print("\nVERDICT:")
     best_mode = min(results, key=lambda x: x['mse'])
-    worst_mode = max(results, key=lambda x: x['mse'])
 
     if all(r['delta_pct'] > 0 for r in results):
         print("  ALL MODES: DO_NO_HARM (some degradation, but minimal)")

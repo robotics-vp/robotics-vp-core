@@ -244,7 +244,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        datapack = run_demo(
+        run_demo(
             prompt=args.prompt,
             episodes=args.episodes,
             output_path=args.output,

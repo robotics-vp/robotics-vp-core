@@ -89,8 +89,8 @@ class TestComputeCurriculumWeights:
         ]
         result = compute_curriculum_weights(episodes, mode="mh_x_scene_ir")
         
-        assert result.missing_scene_ir_mask[0] == True
-        assert result.missing_scene_ir_mask[1] == False
+        assert result.missing_scene_ir_mask[0]
+        assert not result.missing_scene_ir_mask[1]
         # Should still have valid weights
         assert np.all(result.weights > 0)
 

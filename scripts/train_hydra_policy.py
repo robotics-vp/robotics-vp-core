@@ -55,7 +55,6 @@ def build_hydra_policy(skill_modes: List[str]) -> HydraActor:
 
 def _condition_targets(sample: Dict[str, Any]) -> torch.Tensor:
     features = sample.get("condition_features", {}) or {}
-    econ = features.get("econ_slice", {}) or {}
     ood = float(features.get("ood_severity", 0.0))
     recovery = float(features.get("recovery_priority", 0.0))
     novelty = float(features.get("novelty_tier", 0.0))

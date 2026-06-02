@@ -106,7 +106,6 @@ def compute_economic_metrics(info, config, episode_length=60):
     econ = config['economics']
 
     price_per_unit = econ['price_per_unit']
-    human_mp = econ['human_mp']
     human_wage = econ['human_wage']
     damage_cost = econ['damage_cost']
 

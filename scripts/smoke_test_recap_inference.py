@@ -23,7 +23,6 @@ def _build_ontology(root: Path) -> None:
     store.upsert_task(Task(task_id=task_id, name="RecapInferTask", environment_id="env", human_mpl_units_per_hour=60.0, human_wage_per_hour=18.0, default_energy_cost_per_wh=0.1))
     store.upsert_robot(Robot(robot_id="recap_robot", name="RecapBot"))
     now = datetime.utcnow()
-    eps = []
     for idx in range(2):
         ep_id = f"ep_inf_{idx}"
         ep = Episode(episode_id=ep_id, task_id=task_id, robot_id="recap_robot", started_at=now, status="success", metadata={"objective_preset": "balanced"})
@@ -51,7 +50,6 @@ def main():
     # Build tiny dataset directly from ontology events
     store = OntologyStore(root_dir=str(ontology_root))
     entries = []
-    econ_map = {e.episode_id: e for e in store.list_econ_vectors()}
     for ep in store.list_episodes():
         events = store.get_events(ep.episode_id)
         reward_mean = sum(e.reward_scalar for e in events) / len(events)
@@ -98,7 +96,7 @@ def main():
     assert out_path.exists()
     data = out_path.read_text().strip().splitlines()
     assert data
-    parsed = [json.loads(l) for l in data]
+    parsed = [json.loads(line) for line in data]
     assert len(parsed) == len(store.list_episodes())
     # Determinism: re-run and compare output
     score_main()

@@ -6,7 +6,7 @@ import argparse
 import json
 import importlib.util
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 

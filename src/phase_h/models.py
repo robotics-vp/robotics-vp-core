@@ -3,9 +3,9 @@ Phase H data models: Skill, ExplorationBudget, SkillReturns.
 
 Per PHASE_H_ECONOMIC_LEARNER_DESIGN.md.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from src.utils.json_safe import to_json_safe
 

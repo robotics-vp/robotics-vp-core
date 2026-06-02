@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
 
@@ -164,4 +164,6 @@ def get_econ_params_with_profile(
     # Late import to avoid circular dependency
     from .econ_profile_net import build_econ_params_from_context
 
+    if not isinstance(base, EconParams):
+        return base
     return build_econ_params_from_context(base, ctx, profile_net)

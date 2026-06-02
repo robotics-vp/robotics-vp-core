@@ -1,7 +1,5 @@
-import uuid
 from typing import List, Tuple
 
-import numpy as np
 
 from src.valuation.datapack_repo import DataPackRepo
 from src.valuation.datapack_schema import DataPackMeta

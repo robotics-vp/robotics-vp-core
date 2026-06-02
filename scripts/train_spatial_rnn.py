@@ -39,6 +39,29 @@ from src.utils.failure_sentinel import FailureSentinel
 import hashlib
 
 
+def save_checkpoint(
+    *,
+    model: "torch.nn.Module",
+    epoch: int,
+    config: Dict[str, Any],
+    metrics: Dict[str, float],
+    checkpoint_path: Path,
+    seed: int,
+) -> None:
+    """Write a deterministic training checkpoint for an explicitly run training job."""
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "epoch": int(epoch),
+            "config": config,
+            "metrics": metrics,
+            "seed": int(seed),
+        },
+        checkpoint_path,
+    )
+
+
 class SpatialRNNDataset:
     """
     Dataset for Spatial RNN training.

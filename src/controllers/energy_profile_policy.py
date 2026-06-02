@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple
+from typing import List, Tuple
 
 from src.controllers.energy_profile import EnergyProfile
 
@@ -17,7 +17,7 @@ class EnergyProfilePolicy(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.out = nn.Linear(hidden_dim, 6)  # [speed, τ_shoulder, τ_elbow, τ_wrist, τ_gripper, safety]
 
-    def forward(self, x: torch.Tensor) -> Tuple[EnergyProfile, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[List[EnergyProfile], torch.Tensor]:
         h = F.relu(self.fc1(x))
         h = F.relu(self.fc2(h))
         raw = self.out(h)
@@ -30,7 +30,7 @@ class EnergyProfilePolicy(nn.Module):
         tau_gr = 0.5 + torch.sigmoid(raw[:, 4]) * 1.0
         safety = 0.8 + torch.sigmoid(raw[:, 5]) * 1.2  # [0.8, 2.0]
 
-        profiles = []
+        profiles: List[EnergyProfile] = []
         for i in range(x.shape[0]):
             profiles.append(EnergyProfile(
                 speed_scale=float(speed[i]),

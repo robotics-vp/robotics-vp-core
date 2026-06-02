@@ -7,7 +7,6 @@ Batch generation of demonstration trajectories for training.
 import os
 import json
 import numpy as np
-from typing import List
 
 from .co_agent import SIMACoAgent, SIMADataCollector
 
@@ -144,7 +143,7 @@ class TrajectoryGenerator:
         Returns:
             dataset: List of training samples
         """
-        from src.hrl.skills import SkillID, SkillParams
+        from src.hrl.skills import SkillParams
 
         dataset = []
 
@@ -393,7 +392,7 @@ def create_sima_training_pipeline(env_factory, n_trajectories=1000, save_dir='da
 
     paths['augmented_data'] = aug_path
 
-    print(f"\nGeneration complete!")
+    print("\nGeneration complete!")
     print(f"Original samples: {len(dataset)}")
     print(f"Augmented samples: {len(augmented)}")
 

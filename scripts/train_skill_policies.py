@@ -15,15 +15,12 @@ import sys
 import argparse
 import json
 import time
+import importlib.util
 import numpy as np
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(__file__))))
 
-try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 from src.envs.drawer_vase_physics_env import DrawerVasePhysicsEnv, DrawerVaseConfig
 from src.hrl.skills import SkillID, SkillParams
@@ -357,4 +354,3 @@ def main(runner=None):
 
 if __name__ == '__main__':
     main()
-

@@ -75,7 +75,6 @@ class TestPBRSTelescoping:
         The gamma^(T-1) formula in verify_pbrs_telescoping is an approximation
         for gamma < 1 that doesn't hold exactly without weighted summation.
         """
-        T = 10
         phi = np.array([0.0, 0.1, 0.3, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 1.0], dtype=np.float32)
         gamma = 1.0  # Use gamma=1 for exact telescoping
 
@@ -89,7 +88,6 @@ class TestPBRSTelescoping:
 
     def test_telescoping_gamma_one(self):
         """With gamma=1, sum should be Phi[T] - Phi[0]."""
-        T = 5
         phi = np.array([0.0, 0.25, 0.5, 0.75, 1.0], dtype=np.float32)
         gamma = 1.0
 

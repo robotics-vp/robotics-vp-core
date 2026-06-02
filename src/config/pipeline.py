@@ -3,7 +3,6 @@ Pipeline configuration helpers for Stage 6+ training.
 
 Provides access to canonical task configuration and pipeline settings.
 """
-import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 

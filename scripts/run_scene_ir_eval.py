@@ -13,12 +13,15 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from src.analytics.scene_ir_eval_report import EvalMetrics
 
 # GPU memory tracking
 try:
@@ -123,7 +126,7 @@ def run_evaluation(
         if summary_json.size > 0:
             try:
                 summary = json.loads(str(summary_json[0]))
-            except:
+            except Exception:
                 summary = {}
             total_id_switches += summary.get("id_switch_count", 0)
             
@@ -310,7 +313,6 @@ def run_manifest_verification(
     print(f"Verifying {len(entries)} golden clips from manifest...")
     
     # Resolve paths relative to manifest or absolute
-    pass_count = 0
     failures = []
     regressions = []
     

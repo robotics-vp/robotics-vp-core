@@ -34,7 +34,7 @@ def test_computation():
     assert abs(entry["mean_energy"] - 1.5) < 0.001
     # Successes = 1/2 => 0.5
     trust_penalty = min(1.0, 27.5 / 100.0) # 0.275
-    expected_trust = 0.5 * (1.0 - 0.275) # 0.3625
+    expected_trust = 0.5 * (1.0 - trust_penalty) # 0.3625
     assert abs(entry["trust_score"] - expected_trust) < 0.001
 
     # Check 'fast'

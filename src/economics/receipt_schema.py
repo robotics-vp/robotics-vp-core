@@ -115,6 +115,7 @@ class DeploymentReceiptRecord:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "DeploymentReceiptRecord":
+        realized_reward = payload.get("realized_reward")
         return cls(
             schema_version=str(payload.get("schema_version", "deployment_receipt_record_v1")),
             run_id=str(payload.get("run_id", "")),
@@ -128,8 +129,8 @@ class DeploymentReceiptRecord:
             billed_rate=float(payload.get("billed_rate", 0.0)),
             pricing_acceptance=PricingAcceptanceLabel.from_dict(payload.get("pricing_acceptance", {}) or {}),
             realized_reward=(
-                float(payload.get("realized_reward"))
-                if payload.get("realized_reward") is not None
+                float(realized_reward)
+                if realized_reward is not None
                 else None
             ),
             task_success=payload.get("task_success"),

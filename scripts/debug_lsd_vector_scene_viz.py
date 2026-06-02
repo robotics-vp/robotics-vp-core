@@ -35,8 +35,7 @@ try:
     import matplotlib
     matplotlib.use("Agg")  # Use non-interactive backend by default
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle, Circle, FancyArrowPatch
-    from matplotlib.collections import LineCollection
+    from matplotlib.patches import Circle
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -290,7 +289,7 @@ def create_debug_visualization(
         env = LSDVectorSceneEnv(config)
 
     # Reset to generate scene
-    obs = env.reset()
+    env.reset()
     scene_id = env.scene_id
 
     print(f"Scene ID: {scene_id}")

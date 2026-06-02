@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.tfd.condition_mapper import TFDConditionVector  # pragma: no cover
+    pass  # pragma: no cover
 
 # Rejection patterns from spec
 REJECTED_PATTERNS = [

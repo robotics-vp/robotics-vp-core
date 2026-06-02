@@ -17,7 +17,7 @@ import hashlib
 import json
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -335,7 +335,7 @@ class Phase1DatasetBase:
         max_count = max(len(self.stage1_frames), len(self.stage2_segments), len(self.sima2_stress), len(self.isaac_rollouts), len(self.ros_outputs), len(self.scene_tracks))
         samples: List[Dict[str, Any]] = []
         for idx in range(max_count):
-            sample = {
+            sample: Dict[str, Any] = {
                 "sample_id": f"{self.name}_{idx}",
                 "stage1_frame": self.stage1_frames[idx % len(self.stage1_frames)],
                 "stage2_segments": self.stage2_segments[idx % len(self.stage2_segments)],
@@ -345,8 +345,14 @@ class Phase1DatasetBase:
                 "scene_tracks": self.scene_tracks[idx % len(self.scene_tracks)],
             }
             sample = self._augment_sample(sample, idx)
-            sample["trust_tag"] = sample.get("trust_tag") or self._resolve_trust_tag(sample)
-            sample["trust_weight"] = float(sample.get("trust_weight", self._resolve_trust_weight(sample["trust_tag"])))
+            trust_tag = str(sample.get("trust_tag") or self._resolve_trust_tag(sample))
+            trust_weight = sample.get("trust_weight")
+            sample["trust_tag"] = trust_tag
+            sample["trust_weight"] = (
+                float(trust_weight)
+                if trust_weight is not None
+                else self._resolve_trust_weight(trust_tag)
+            )
             samples.append(sample)
         return samples
 

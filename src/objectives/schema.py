@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Sequence, Tuple
+from typing import Any, Dict, Mapping, Tuple
 
 import hashlib
 import json
@@ -51,7 +51,7 @@ class ObjectiveTensorSchema:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()[:16]
 
-    def normalize_values(self, values: Sequence[float]) -> np.ndarray:
+    def normalize_values(self, values: Any) -> np.ndarray:
         arr = np.asarray(values, dtype=np.float32)
         if arr.shape[-1] != len(self.axes):
             raise ValueError(

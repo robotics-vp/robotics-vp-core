@@ -193,7 +193,7 @@ class EconomicLearner:
             skill.status = update_skill_status(skill)
 
         # 5. Generate report
-        summary = {
+        summary: Dict[str, Any] = {
             "receipt_kind": "phase_h_budget_cycle_v1",
             "authority_class": "remain_advisory",
             "decision_scope": "phase_h_budget_coordination",
@@ -236,6 +236,12 @@ class EconomicLearner:
                 "bounded_actions": list(activation.get("bounded_actions", []) or []),
                 "future_training_backlog": list(shell_activation.get("future_training", [])),
             }
+            receipt_context = summary.get("input_receipt_context")
+            consumed_receipt_kinds = (
+                list(receipt_context.get("consumed_receipt_kinds", []))
+                if isinstance(receipt_context, dict)
+                else []
+            )
             summary["budget_activation_work_order"] = build_execution_work_order(
                 order_type="shell_activation",
                 subject_id=f"phase_h_budget:{episode_count}",
@@ -248,9 +254,7 @@ class EconomicLearner:
                 metadata={
                     "activation_id": activation.get("activation_id"),
                     "episode_count": episode_count,
-                    "consumed_receipt_kinds": list(
-                        summary.get("input_receipt_context", {}).get("consumed_receipt_kinds", [])
-                    ),
+                    "consumed_receipt_kinds": consumed_receipt_kinds,
                 },
             ).to_dict()
         if future_training:
@@ -352,14 +356,14 @@ class EconomicLearner:
         if exploration_total > cap and exploration_total > 0:
             scale = cap / exploration_total
             for skill_id, budget in list(planned_budgets.items()):
-                skill = self.skills.get(skill_id)
-                if skill is None or skill.status != SkillStatus.EXPLORATION.value:
+                optional_skill = self.skills.get(skill_id)
+                if optional_skill is None or optional_skill.status != SkillStatus.EXPLORATION.value:
                     continue
                 scaled_budget_usd = budget.budget_usd * scale
                 scaled_remaining = min(budget.remaining_usd, scaled_budget_usd)
                 max_episodes = (
-                    int(scaled_budget_usd * budget.data_collection_pct / skill.data_cost_per_episode)
-                    if skill.data_cost_per_episode > 0
+                    int(scaled_budget_usd * budget.data_collection_pct / optional_skill.data_cost_per_episode)
+                    if optional_skill.data_cost_per_episode > 0
                     else 0
                 )
                 planned_budgets[skill_id] = ExplorationBudget(

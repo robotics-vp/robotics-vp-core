@@ -8,7 +8,7 @@ This is additive infrastructure - no changes to Phase B math or RL training loop
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional
 from enum import Enum
 import json
 

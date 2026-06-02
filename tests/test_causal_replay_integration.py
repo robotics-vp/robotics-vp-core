@@ -136,7 +136,6 @@ class TestReplayCombinedInputsSha:
             sel_path = output_dir / "selection_manifest.json"
             with open(sel_path, "w") as f:
                 json.dump(selection, f, indent=2, sort_keys=True)
-            sel_sha = sha256_file(str(sel_path))
             
             # Create run manifest with WRONG SHA (intentional mismatch)
             run_manifest = {

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -26,7 +27,7 @@ def create_synthetic_scene_tracks_lite(
     T: int = 5,
     K: int = 2,
     include_latents: bool = False,
-) -> "SceneTracksLite":
+) -> Any:
     """Create synthetic SceneTracksLite for testing.
 
     Args:

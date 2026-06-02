@@ -240,7 +240,6 @@ def train_aligned_encoder(
 
         for batch_idx, videos in enumerate(dataloader):
             videos = videos.to(device)  # (B, T, C, H, W)
-            B = videos.shape[0]
 
             # Forward pass
             z_student, loss_align, metrics = student.distillation_step(

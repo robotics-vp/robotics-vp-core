@@ -9,7 +9,6 @@ from src.regality.shadow_nodes import (
     PricingTruthRegal,
     RewardSafetyRegal,
     ShadowRegalContext,
-    ShadowRegalDecision,
     ShadowRegalNode,
     ShadowRegalStatus,
     default_shadow_nodes,

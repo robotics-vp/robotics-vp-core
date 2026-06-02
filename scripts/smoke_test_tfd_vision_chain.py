@@ -50,7 +50,9 @@ class StubEconVector:
 
 
 def build_builder() -> PolicyObservationBuilder:
-    trust_loader = lambda: {}
+    def trust_loader():
+        return {}
+
     adapter_cfg = {"use_condition_vector": True}
     adapter = ObservationAdapter(policy_registry=None, trust_matrix_loader=trust_loader, recap_loader=None, config=adapter_cfg)
     encoder = StubEncoder()

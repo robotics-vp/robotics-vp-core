@@ -518,56 +518,76 @@ python3 -m pytest -q tests/embodiment tests/test_embodiment_actuation_world_mode
 python3 -m pytest -q tests/test_backend_health.py tests/test_local_backend_factory_adapter.py tests/test_isaac_backend_shadow_contract.py tests/test_synthetic_backend.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py
 ```
 
-The residual debt is now full-repo static hygiene outside that narrowed gate.
-It should still be burned down, because these modules are lower-WM producers,
-trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
-automatically obsolete just because the WM architecture now governs them.
+The fifteenth local debt-burn pass made full-repo `mypy` and `ruff` clean.
+This was static/typing/script hygiene only across the remaining support
+surfaces, legacy/dev scripts, and regression tests. It cleared the residual
+`src/datasets`, `src/phase_h`, one-error mypy surfaces, ruff `F821`, safe
+`F401`/`F841`, and small `E`/`F` rules while keeping old scripts as substrate
+instead of deleting them. It added a missing checkpoint helper to
+`scripts/train_spatial_rnn.py` so the script remains executable, but no
+training command was run and no weights were written.
+
+The following full-repo static checks now pass:
+
+```bash
+python3 -m mypy src/ --show-error-codes --no-error-summary
+python3 -m ruff check .
+python3 -m compileall src scripts tests -q
+```
+
+Focused non-training receipts from this pass:
+
+```bash
+python3 -m pytest -q \
+  tests/process_reward \
+  tests/analytics/test_combined_curriculum.py \
+  tests/representation/test_homeostasis.py \
+  tests/test_causal_replay_integration.py \
+  tests/test_lsd_vector_scene_env.py \
+  tests/vision/scene_ir_tracker/test_upstream_integration.py \
+  tests/test_dataset_bridges.py
+
+python3 scripts/smoke_test_condition_vector_end_to_end.py
+python3 scripts/smoke_test_tfd_vision_chain.py
+python3 scripts/smoke_test_econ_correlator_impl.py
+python3 scripts/smoke_test_vision_interfaces.py
+python3 scripts/run_scene_ir_eval.py --help
+python3 scripts/train_spatial_rnn.py --help
+```
+
+Result: focused pytest `113 passed, 20 warnings`; smoke/help checks passed.
+The warning set is the existing process-reward hindsight warning.
+
+The residual local debt is no longer static hygiene. It is local wiring and
+audit work that can be advanced without GPU/provider/hardware execution:
+provider bring-up readiness ledger, Unitree rosbag2/MCAP unavailable receipts,
+LeRobot video-to-replay-to-perception receipts, Unitree event spines into Phase
+6.4 advisory eval receipts, bio/neuro receipt joins, and neural trainability
+audit artifacts.
 
 Current residual broad ruff:
 
 | Area | Count |
 | --- | ---: |
-| `scripts/` | 38 |
-| `tests/` | 9 |
-| `src/orchestrator/` | 8 |
-| `src/learning/` | 7 |
-| `src/sima/` | 6 |
-| `src/config/` | 4 |
-| `src/contracts/` | 4 |
-| `src/tfd/` | 4 |
-| `policies/` | 3 |
-| `src/shadow_runtime/` | 3 |
-| other checked-in support surfaces | 19 |
-| **Total** | **101** |
+| **Total** | **0** |
 
 Current residual broad ruff by code:
 
 | Code | Meaning | Count | Disposition |
 | --- | --- | ---: | --- |
-| `F401` | unused imports | 50 | mostly safe mechanical cleanup |
-| `F841` | unused locals | 35 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
-| `F821` | undefined names | 6 | treat as bugs before mechanical cleanup |
-| other `E`/`F` rules | style/ambiguous names/bare except | 10 | mechanical except where exceptions hide provider/runtime failures |
+| all enabled rules | full repo static hygiene | 0 | keep clean as a guardrail before provider/GPU/hardware sessions |
 
 Current residual full-repo mypy:
 
 | Area | Count |
 | --- | ---: |
-| `src/datasets/` | 3 |
-| `src/phase_h/` | 2 |
-| other checked-in support surfaces | 10 |
-| **Total actual `error:` records** | **15** |
+| **Total actual `error:` records** | **0** |
 
 Current residual full-repo mypy by kind:
 
 | Kind | Count | Meaning |
 | --- | ---: | --- |
-| `arg-type` | 8 | interface drift and weak payload narrowing |
-| `assignment` | 3 | optional dependency/module typing, tensor/list reuse, schema mismatch |
-| `return-value` | 1 | declared receipt/runtime outputs too narrow |
-| `name-defined` | 1 | missing or stale definitions |
-| `var-annotated` | 1 | untyped mutable containers |
-| `attr-defined` | 1 | object payloads not narrowed before attribute access |
+| all enabled checks | 0 | full `src/` mypy surface is clean |
 
 Legacy/support-surface disposition:
 
@@ -728,31 +748,16 @@ Not implemented as proof:
 
 ## Ranked Next-Session Work
 
-1. **Full-repo mypy burn-down by support-surface family**
-   - What: burn down the residual full-repo mypy debt in this order:
-     `src/datasets/`, `src/phase_h/`, then the remaining one-error support
-     surfaces: `src/ontology`, `src/economics`, `src/geometry_graphs`,
-     `src/controllers`, `src/dataset_bridges`, `src/behaviour`,
-     `src/objectives`, `src/config`, `src/shadow_runtime`, and
-     `src/ingestion`.
-   - Why now: these are the lower-WM producers, provider adapters,
-     curriculum/replay surfaces, and trainer/runtime lanes that the WM stack
-     consumes. Leaving them noisy makes future provider/GPU proof harder to
-     trust.
-   - Verify: `python3 -m mypy src/`.
-   - Do not: change reward math, write weights, promote local scaffolds, or
-     convert fixed-base curriculum into G1 proof while typing.
+1. **Keep full-repo static hygiene green**
+   - What: use `python3 -m mypy src/` and `python3 -m ruff check .` as
+     guardrails before and after local wiring work.
+   - Why now: the repo is static-clean; letting it regress would hide real
+     provider/GPU/hardware blockers behind local noise.
+   - Verify: `python3 -m mypy src/`; `python3 -m ruff check .`.
+   - Do not: broaden static cleanup into reward math, weight writes, or
+     behavior-changing refactors.
 
-2. **Full-repo ruff burn-down with bug-first handling**
-   - What: fix `F821` undefined names first, then safe `F401`/`F841`
-     mechanical cleanup, then the remaining small `E`/`F` rules.
-   - Why now: most residual ruff is mechanical, but undefined names and bare
-     exceptions can hide broken scripts or provider/runtime blockers.
-   - Verify: `python3 -m ruff check .`.
-   - Do not: delete historical scripts blindly; either keep them working,
-     mark them dev-only, or migrate them into receipt-emitting paths.
-
-3. **Provider bring-up readiness ledger**
+2. **Provider bring-up readiness ledger**
    - What: create a typed local provider ledger that maps SAM/SAM3D,
      DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma to commands,
      expected receipts, unavailable posture, RunPod profile, and owner WM.
@@ -763,7 +768,44 @@ Not implemented as proof:
    - Do not: download weights, run providers, or claim provider execution
      locally.
 
-4. **Bio/neuro receipt join wiring**
+3. **Unitree rosbag2/MCAP unavailable receipt closeout**
+   - What: make rosbag2/MCAP optional imports fail closed into typed
+     unavailable/blocker receipts and fixture-only parser-shape tests.
+   - Why now: trace import blockers are local and should become explicit before
+     hardware/runtime sessions.
+   - Verify: Phase 4 bridge tests, blocker probe, static checks.
+   - Do not: claim real rosbag2/MCAP import without real files and dependencies.
+
+4. **LeRobot video to replay to perception receipts**
+   - What: normalize video/camera receipts into replay rows and perception
+     samples while preserving ids, frame/step/timestamp/camera keys, sidecars,
+     runtime refs, provenance, and unavailable posture.
+   - Why now: this advances lower-WM evidence plumbing without downloads,
+     provider execution, or GPU truth claims.
+   - Verify: video receipt -> replay rows -> perception sample tests.
+   - Do not: treat placeholder/flattened CPU features as promotion-grade
+     provider features.
+
+5. **Unitree event spines into Phase 6.4 advisory eval**
+   - What: use existing Unitree event-spine producers/refs and wire fresh
+     `event_spine_ref` values into Phase 6.4 advisory runtime/eval receipts.
+   - Why now: this gives transport eval better local lower-WM labels without
+     inventing a parallel event model.
+   - Verify: refs -> receipts/evals tests with blocker/unavailable gates.
+   - Do not: bypass receivers, grant authority, or claim hardware/provider
+     proof.
+
+6. **Neural trainability audit**
+   - What: emit additive JSON/JSONL/doc artifacts over neural/seam/encoder/
+     policy/head/bridge/receiver/trainer surfaces with executable follow-up
+     rows and plane routing.
+   - Why now: the static-clean repo can now distinguish code gaps from GPU,
+     provider, hardware, data, and benchmark blockers.
+   - Verify: audit checker plus static checks.
+   - Do not: train, write weights, or mark blocked components promotion
+     eligible.
+
+7. **Bio/neuro receipt join wiring**
    - What: join the already-wired local substrate receipts into normal
      lower-WM/Economic consumption rows.
    - Why now: the substrate should become queryable evidence without
@@ -771,36 +813,6 @@ Not implemented as proof:
    - Verify: substrate checker plus focused lower-WM consumption tests.
    - Do not: treat the joins as active sensing execution, interoceptive
      hardware telemetry, trained anomaly critics, or Phase 7 authority.
-
-5. **Legacy/support-surface disposition**
-   - What: for each now-typed support family, decide whether it is a
-     lower-WM producer, trainer/runtime lane, curriculum/regression source,
-     provider/hardware adapter, or legacy/dev-only tool.
-   - Why now: the repo is mostly encompassed by the WM architecture, but not
-     every directory belongs under `src/world_model/`; some should remain as
-     substrate with explicit contracts.
-   - Verify: doc updates plus focused tests for the family touched.
-   - Do not: move modules or rename public APIs unless the tests and docs prove
-     the migration boundary.
-
-6. **RunPod prerequisite closeout**
-   - What: install/auth `runpodctl`, set `RUNPOD_API_KEY`, and set
-     `RUNPOD_VOLUME_ID`.
-   - Why now: provider/loop/train profiles and the new provider readiness
-     ledger are still local planning surfaces until these prerequisites exist.
-   - Verify: `./scripts/runpod/ensure_cli.sh`.
-   - Do not: call manifest preparation or ledger generation a remote run.
-
-7. **External/provider/hardware proof lanes**
-   - What: after local static debt is quiet, run the provider bring-up,
-     G1 loop, and training profiles only on configured RunPod/provider/hardware
-     planes with manifests under `.agent/runs/<run_id>/manifest.json`.
-   - Why now: this is the remaining gap between local typed receipts and real
-     roadmap proof.
-   - Verify: provider/runtime receipts, run manifests, focused smoke tests, and
-     nightly audit updates.
-   - Do not: claim provider, GPU, Isaac/Unitree, Holosoma, or promotion proof
-     without real execution artifacts.
 
 ## Updated Goal Message For Next Session
 
@@ -813,20 +825,17 @@ Read `AGENTS.md`,
 `docs/economic_world_model/multi_wm_unwired_surface_audit_2026_06_01.md`.
 
 Burn down all remaining local subsystem debt in
-`wm_subsystem_debt_sweep_2026_06_01.md` continuously and robustly. Start with
-full-repo mypy by support-surface family:
-`src/datasets/`, `src/phase_h/`, then the remaining one-error support surfaces:
-`src/ontology`, `src/economics`, `src/geometry_graphs`, `src/controllers`,
-`src/dataset_bridges`, `src/behaviour`, `src/objectives`, `src/config`,
-`src/shadow_runtime`, and `src/ingestion`. Then burn down full-repo ruff
-bug-first: fix `F821` undefined names, then safe unused imports/locals, then
-the remaining style/exception issues.
+`wm_subsystem_debt_sweep_2026_06_01.md` continuously and robustly. Full-repo
+`mypy src/` and `ruff check .` are currently clean; keep them green as
+guardrails after every tranche.
 
 Further, burn down and wire all remaining local items from
 `multi_wm_unwired_surface_audit_2026_06_01.md`: provider bring-up readiness
-ledger, bio/neuro receipt joins into lower-WM/Economic consumption rows,
-bounded Phase 7 receipt consumption through existing adapters only, and
-script/smoke entrypoint hygiene.
+ledger, Unitree rosbag2/MCAP typed unavailable/blocker receipts, LeRobot
+video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
+Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
+bio/neuro receipt joins into lower-WM/Economic consumption rows, and bounded
+Phase 7 receipt consumption through existing adapters only.
 
 Keep G1/bipedal whole-body primary. Treat stable-base mobile manipulation as
 fallback/degraded mode and fixed-base tabletop/workcell/dishwashing as

@@ -33,7 +33,7 @@ except ImportError:
     print("PyTorch not available. Cannot train vision backbone.")
     sys.exit(1)
 
-from src.config.pipeline import get_training_config, is_neural_mode_enabled, get_determinism_config, get_safety_config
+from src.config.pipeline import is_neural_mode_enabled, get_determinism_config
 from src.datasets import VisionPhase1Dataset
 from src.datasets.base import set_deterministic_seeds
 from src.utils.json_safe import to_json_safe
@@ -379,7 +379,6 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Set seeds for determinism
     determinism_config = get_determinism_config()
-    safety_config = get_safety_config()
     set_deterministic_seeds(args.seed)
 
     if determinism_config.get('enforce_cuda_determinism', True):
@@ -426,7 +425,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     optimizer = torch.optim.Adam(params, lr=args.lr)
 
     # AMP Setup
-    training_config = get_training_config()
     use_amp = args.use_mixed_precision or should_use_amp({"training": {"amp": args.use_mixed_precision}})
     scaler = torch.cuda.amp.GradScaler() if use_amp and torch.cuda.is_available() else None
     print(f"[train_vision_backbone_real] AMP Enabled: {use_amp}")

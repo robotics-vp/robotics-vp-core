@@ -277,7 +277,7 @@ class ROSBridgeIngestor:
 
     def _env_state_from_tf(self, payload: Dict[str, Any], timestep: int, timestamp: Optional[float] = None) -> EnvStateDigest:
         transforms = payload.get("transforms") or payload.get("tf") or payload.get("frames") or payload
-        tf_tree = {}
+        tf_tree: Dict[str, Any] = {}
         if isinstance(transforms, list):
             for tf in transforms:
                 child = str(tf.get("child_frame_id") or tf.get("child") or len(tf_tree))

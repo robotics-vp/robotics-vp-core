@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
@@ -76,8 +76,6 @@ def build_small_world_graph(
         lattice_adjacency: Lattice-only adjacency (for nav baseline)
         shortcut_scores: List of quality scores for each shortcut
     """
-    rng = np.random.default_rng(seed)
-    
     if grid_shape is not None:
         # Grid mode: reshape to (H*W, D)
         H, W = grid_shape
@@ -736,7 +734,7 @@ def graph_summary_from_embeddings(
     
     # Determine node mode
     if grid_shape is not None:
-        node_mode = "grid"
+        node_mode: Literal["grid", "tokens", "pooled"] = "grid"
     elif embeddings.ndim == 2:
         node_mode = "tokens"
     else:

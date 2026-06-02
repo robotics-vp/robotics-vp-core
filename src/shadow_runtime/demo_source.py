@@ -1,7 +1,7 @@
 """Deterministic workcell-backed source adapter for the shadow control plane."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -294,7 +294,12 @@ def _run_single_episode(
         "quality_score": quality_score,
     }
     ended_at = started_at + timedelta(seconds=duration_s)
-    episode_log = env.get_episode_log(metrics=episode_metrics).to_dict()
+    episode_log_metrics = {
+        key: float(value)
+        for key, value in episode_metrics.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    }
+    episode_log = env.get_episode_log(metrics=episode_log_metrics).to_dict()
     return ShadowEpisodeTrace(
         episode_id=episode_id,
         datapack_id=datapack_id,

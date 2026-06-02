@@ -276,7 +276,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        report = run_demo(
+        run_demo(
             tracks_path=args.tracks,
             generate_synthetic=args.generate_synthetic or args.tracks is None,
             num_tracks=args.num_tracks,

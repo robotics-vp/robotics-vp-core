@@ -4,7 +4,7 @@ Condition mapping for Text-Front-Door.
 Implements deterministic Intent -> ConditionVector mapping with safety
 clamps and advisory fields (novelty_bias, safety_emphasis, etc.).
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from src.tfd.intents import InstructionType, ParsedIntent

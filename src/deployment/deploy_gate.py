@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 
 from src.contracts.schemas import (
     LedgerRegalV1,
-    RegalReportV1,
     DeployGateInputsV1,
     DeployGateDecisionV1,
 )

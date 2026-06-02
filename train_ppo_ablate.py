@@ -116,9 +116,6 @@ def run_ablation(mode, episodes=300, use_condition_vector_for_policy: bool = Fal
         device='cpu'
     )
 
-    # Novelty tracker (simple stub for ablations)
-    latent_dim = 4  # Use state dim as latent
-
     # Logger
     logger = CsvLogger(log_path)
     condition_builder = ConditionVectorBuilder() if USE_CONDITION_VECTOR else None

@@ -1,7 +1,6 @@
 """Learned anomaly support scores that augment typed regal rules."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence, Tuple
 
 import torch

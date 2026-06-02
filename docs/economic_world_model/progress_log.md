@@ -4513,3 +4513,30 @@ Verification for the Phase-5.1 pass:
   GPU/hardware, publish ROS2, write SDK2 commands, mutate reward/controller
   math, change physical constants, convert fixed-base curriculum into G1 proof,
   or claim promotion-grade evidence.
+
+### 2026-06-02: Full-repo static hygiene clean
+
+- Cleared the remaining full-repo mypy and ruff debt. `python3 -m mypy src/`
+  and `python3 -m ruff check .` now pass.
+- Cleared residual mypy surfaces in `src/datasets`, `src/phase_h`,
+  deployment/economics/objective schemas, controller policy typing,
+  LeRobot-perception adapter config, ROS bridge TF trees, and shadow-runtime
+  demo metrics.
+- Cleared ruff `F821`, safe `F401`/`F841`, and small style/exception issues
+  across scripts, tests, policies, `src/sima`, `src/orchestrator`,
+  `src/data_value`, and static-support modules while keeping legacy/dev scripts
+  executable instead of deleting them.
+- Current residual static debt after this pass:
+  - broad mypy: `0` `error:` records
+  - broad ruff: `0` issues
+- Verification receipts:
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary`: pass
+  - `python3 -m ruff check .`: pass
+  - `python3 -m compileall src scripts tests -q`: pass
+  - focused pytest: `113 passed, 20 warnings`
+  - non-training script smokes/help checks: pass
+- Boundary preserved: this was local static/script/test hygiene only. It did
+  not run providers, download weights, train models, write weights, launch
+  pods, operate Unitree or other hardware, publish ROS2, write SDK2 commands,
+  mutate reward/controller math, change physical constants, grant Phase 7
+  authority, or claim promotion-grade evidence.

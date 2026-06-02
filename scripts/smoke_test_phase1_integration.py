@@ -7,6 +7,7 @@ Tests full stack:
 3. End-to-end determinism and JSON-safety
 """
 import sys
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -20,11 +21,8 @@ from src.vision.spatial_rnn import run_spatial_rnn
 from src.vision.interfaces import VisionFrame
 
 # Check if PyTorch available
-try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+if not TORCH_AVAILABLE:
     print("PyTorch not available. Using stub mode for integration tests.")
 
 
