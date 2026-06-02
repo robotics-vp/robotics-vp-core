@@ -327,9 +327,17 @@ class TraceImportAdapterReceipt:
     adapter_key: str
     schema_targets: list[str] = field(default_factory=list)
     input_path: str = ""
+    status: str = "blocked"
+    dependency_modules: list[str] = field(default_factory=list)
+    dependency_available: bool = True
+    missing_dependency_modules: list[str] = field(default_factory=list)
+    input_path_exists: bool = False
     adapter_available: bool = False
     import_executed: bool = False
     rows_imported: int = 0
+    fixture_shape_validated: bool = False
+    parser_shape_only: bool = False
+    real_import_claimed: bool = False
     supported_topics: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
     live_stream_observed: bool = False
@@ -344,9 +352,17 @@ class TraceImportAdapterReceipt:
             "adapter_key": self.adapter_key,
             "schema_targets": strings(self.schema_targets),
             "input_path": self.input_path,
+            "status": self.status,
+            "dependency_modules": strings(self.dependency_modules),
+            "dependency_available": bool(self.dependency_available),
+            "missing_dependency_modules": strings(self.missing_dependency_modules),
+            "input_path_exists": bool(self.input_path_exists),
             "adapter_available": bool(self.adapter_available),
             "import_executed": bool(self.import_executed),
             "rows_imported": int(self.rows_imported),
+            "fixture_shape_validated": bool(self.fixture_shape_validated),
+            "parser_shape_only": bool(self.parser_shape_only),
+            "real_import_claimed": bool(self.real_import_claimed),
             "supported_topics": strings(self.supported_topics),
             "blockers": strings(self.blockers),
             "live_stream_observed": bool(self.live_stream_observed),
@@ -361,9 +377,21 @@ class TraceImportAdapterReceipt:
             adapter_key=str(payload.get("adapter_key", "")),
             schema_targets=strings(payload.get("schema_targets")),
             input_path=str(payload.get("input_path", "")),
+            status=str(payload.get("status", "blocked")),
+            dependency_modules=strings(payload.get("dependency_modules")),
+            dependency_available=bool(payload.get("dependency_available", True)),
+            missing_dependency_modules=strings(
+                payload.get("missing_dependency_modules")
+            ),
+            input_path_exists=bool(payload.get("input_path_exists", False)),
             adapter_available=bool(payload.get("adapter_available", False)),
             import_executed=bool(payload.get("import_executed", False)),
             rows_imported=int(payload.get("rows_imported", 0) or 0),
+            fixture_shape_validated=bool(
+                payload.get("fixture_shape_validated", False)
+            ),
+            parser_shape_only=bool(payload.get("parser_shape_only", False)),
+            real_import_claimed=bool(payload.get("real_import_claimed", False)),
             supported_topics=strings(payload.get("supported_topics")),
             blockers=strings(payload.get("blockers")),
             live_stream_observed=bool(payload.get("live_stream_observed", False)),
@@ -544,6 +572,8 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
     mujoco_headless_step_receipt_count: int
     mujoco_trace_row_count: int
     trace_import_adapter_receipt_count: int
+    trace_import_unavailable_receipt_count: int
+    trace_fixture_shape_only_count: int
     safety_envelope_expansion_receipt_count: int
     operator_recovery_scenario_count: int
     operator_recovery_drill_receipt_count: int
@@ -554,6 +584,8 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
     operator_drill_runner_complete: bool
     local_runtime_evidence_bridge_complete: bool
     minimal_mujoco_headless_step_executed: bool = False
+    rosbag2_real_import_claimed: bool = False
+    mcap_real_import_claimed: bool = False
     live_stream_observed: bool = False
     ros2_publish_attempted: bool = False
     unitree_sdk2_write_enabled: bool = False
@@ -584,6 +616,12 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
             "trace_import_adapter_receipt_count": int(
                 self.trace_import_adapter_receipt_count
             ),
+            "trace_import_unavailable_receipt_count": int(
+                self.trace_import_unavailable_receipt_count
+            ),
+            "trace_fixture_shape_only_count": int(
+                self.trace_fixture_shape_only_count
+            ),
             "safety_envelope_expansion_receipt_count": int(
                 self.safety_envelope_expansion_receipt_count
             ),
@@ -612,6 +650,8 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
             "minimal_mujoco_headless_step_executed": bool(
                 self.minimal_mujoco_headless_step_executed
             ),
+            "rosbag2_real_import_claimed": bool(self.rosbag2_real_import_claimed),
+            "mcap_real_import_claimed": bool(self.mcap_real_import_claimed),
             "live_stream_observed": bool(self.live_stream_observed),
             "ros2_publish_attempted": bool(self.ros2_publish_attempted),
             "unitree_sdk2_write_enabled": bool(self.unitree_sdk2_write_enabled),
@@ -644,6 +684,12 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
             trace_import_adapter_receipt_count=int(
                 payload.get("trace_import_adapter_receipt_count", 0) or 0
             ),
+            trace_import_unavailable_receipt_count=int(
+                payload.get("trace_import_unavailable_receipt_count", 0) or 0
+            ),
+            trace_fixture_shape_only_count=int(
+                payload.get("trace_fixture_shape_only_count", 0) or 0
+            ),
             safety_envelope_expansion_receipt_count=int(
                 payload.get("safety_envelope_expansion_receipt_count", 0) or 0
             ),
@@ -673,6 +719,12 @@ class Phase4UnitreeRuntimeEvidenceBridgeReport:
             ),
             minimal_mujoco_headless_step_executed=bool(
                 payload.get("minimal_mujoco_headless_step_executed", False)
+            ),
+            rosbag2_real_import_claimed=bool(
+                payload.get("rosbag2_real_import_claimed", False)
+            ),
+            mcap_real_import_claimed=bool(
+                payload.get("mcap_real_import_claimed", False)
             ),
             live_stream_observed=bool(payload.get("live_stream_observed", False)),
             ros2_publish_attempted=bool(payload.get("ros2_publish_attempted", False)),
@@ -890,70 +942,127 @@ def build_trace_import_adapter_receipts(
         trace_root / "unitree_contact_traces_v1.jsonl",
     ]
     jsonl_rows = sum(len(_load_jsonl(path)) for path in jsonl_paths)
-    adapters = [
-        (
-            "jsonl_unitree_trace_bundle",
-            str(trace_root),
-            True,
-            bool(jsonl_rows),
-            jsonl_rows,
-            [] if jsonl_rows else ["jsonl_trace_bundle_missing_or_empty"],
-        ),
-        (
-            "rosbag2_unitree_topics",
-            str(rosbag2_path or ""),
-            importlib.util.find_spec("rosbag2_py") is not None,
-            bool(rosbag2_path and Path(rosbag2_path).exists()),
-            0,
-            []
-            if rosbag2_path and Path(rosbag2_path).exists()
-            else ["rosbag2_input_path_missing"],
-        ),
-        (
-            "mcap_unitree_topics",
-            str(mcap_path or ""),
-            importlib.util.find_spec("mcap") is not None,
-            bool(mcap_path and Path(mcap_path).exists()),
-            0,
-            []
-            if mcap_path and Path(mcap_path).exists()
-            else ["mcap_input_path_missing"],
-        ),
+    schema_targets = [
+        "LowStateTrace",
+        "ImuTrace",
+        "WirelessEStopTrace",
+        "ContactTrace",
     ]
-    receipts: list[TraceImportAdapterReceipt] = []
-    for adapter_key, input_path, available, executed, row_count, blockers in adapters:
+    supported_topics = [
+        "/lowstate",
+        "/lf/lowstate",
+        "/wirelesscontroller",
+        "/api/sport/request",
+        "/lowcmd",
+    ]
+
+    def _external_adapter(
+        *,
+        adapter_key: str,
+        module_name: str,
+        input_path: str | Path | None,
+        path_blocker: str,
+        real_import_blocker: str,
+    ) -> TraceImportAdapterReceipt:
+        path_text = str(input_path or "")
+        path_exists = bool(input_path and Path(input_path).exists())
+        dependency_available = importlib.util.find_spec(module_name) is not None
+        missing_modules = [] if dependency_available else [module_name]
+        blockers = [
+            *[f"{name}_module_missing" for name in missing_modules],
+            *([] if path_exists else [path_blocker]),
+        ]
+        if dependency_available and path_exists:
+            blockers.append(real_import_blocker)
+        status = (
+            "blocked_real_stream_import_not_executed"
+            if dependency_available and path_exists
+            else "blocked_missing_dependency_and_input_path"
+            if missing_modules and not path_exists
+            else "blocked_missing_dependency"
+            if missing_modules
+            else "blocked_input_path_missing"
+        )
         payload = {
             "adapter_key": adapter_key,
-            "input_path": input_path,
-            "available": available,
-            "executed": executed,
-            "row_count": row_count,
+            "input_path": path_text,
+            "status": status,
+            "dependency_available": dependency_available,
+            "path_exists": path_exists,
             "blockers": blockers,
         }
-        receipts.append(
-            TraceImportAdapterReceipt(
-                receipt_id=stable_id("unitree_trace_import_adapter", payload),
-                adapter_key=adapter_key,
-                schema_targets=[
-                    "LowStateTrace",
-                    "ImuTrace",
-                    "WirelessEStopTrace",
-                    "ContactTrace",
-                ],
-                input_path=input_path,
-                adapter_available=available,
-                import_executed=executed,
-                rows_imported=row_count,
-                supported_topics=[
-                    "/lowstate",
-                    "/lf/lowstate",
-                    "/wirelesscontroller",
-                    "/api/sport/request",
-                    "/lowcmd",
-                ],
-                blockers=blockers,
-            )
+        return TraceImportAdapterReceipt(
+            receipt_id=stable_id("unitree_trace_import_adapter", payload),
+            adapter_key=adapter_key,
+            schema_targets=schema_targets,
+            input_path=path_text,
+            status=status,
+            dependency_modules=[module_name],
+            dependency_available=dependency_available,
+            missing_dependency_modules=missing_modules,
+            input_path_exists=path_exists,
+            adapter_available=dependency_available,
+            import_executed=False,
+            rows_imported=0,
+            fixture_shape_validated=path_exists,
+            parser_shape_only=path_exists,
+            real_import_claimed=False,
+            supported_topics=supported_topics,
+            blockers=blockers,
         )
+
+    receipts: list[TraceImportAdapterReceipt] = []
+    jsonl_blockers = [] if jsonl_rows else ["jsonl_trace_bundle_missing_or_empty"]
+    jsonl_payload = {
+        "adapter_key": "jsonl_unitree_trace_bundle",
+        "input_path": str(trace_root),
+        "status": (
+            "ok_jsonl_trace_bundle_imported"
+            if jsonl_rows
+            else "blocked_jsonl_trace_bundle_missing_or_empty"
+        ),
+        "row_count": jsonl_rows,
+        "blockers": jsonl_blockers,
+    }
+    receipts.append(
+        TraceImportAdapterReceipt(
+            receipt_id=stable_id("unitree_trace_import_adapter", jsonl_payload),
+            adapter_key="jsonl_unitree_trace_bundle",
+            schema_targets=schema_targets,
+            input_path=str(trace_root),
+            status=str(jsonl_payload["status"]),
+            dependency_modules=[],
+            dependency_available=True,
+            missing_dependency_modules=[],
+            input_path_exists=trace_root.exists(),
+            adapter_available=True,
+            import_executed=bool(jsonl_rows),
+            rows_imported=jsonl_rows,
+            fixture_shape_validated=bool(jsonl_rows),
+            parser_shape_only=False,
+            real_import_claimed=False,
+            supported_topics=supported_topics,
+            blockers=jsonl_blockers,
+        )
+    )
+    receipts.append(
+        _external_adapter(
+            adapter_key="rosbag2_unitree_topics",
+            module_name="rosbag2_py",
+            input_path=rosbag2_path,
+            path_blocker="rosbag2_input_path_missing",
+            real_import_blocker="rosbag2_real_stream_import_not_executed",
+        )
+    )
+    receipts.append(
+        _external_adapter(
+            adapter_key="mcap_unitree_topics",
+            module_name="mcap",
+            input_path=mcap_path,
+            path_blocker="mcap_input_path_missing",
+            real_import_blocker="mcap_real_stream_import_not_executed",
+        )
+    )
     return receipts
 
 
@@ -1200,6 +1309,24 @@ def build_phase4_unitree_runtime_evidence_bridge(
         )
         and not any(receipt.live_stream_observed for receipt in trace_adapters)
     )
+    trace_import_unavailable_count = sum(
+        1
+        for receipt in trace_adapters
+        if receipt.adapter_key in {"rosbag2_unitree_topics", "mcap_unitree_topics"}
+        and not receipt.real_import_claimed
+    )
+    trace_fixture_shape_only_count = sum(
+        1 for receipt in trace_adapters if receipt.parser_shape_only
+    )
+    rosbag2_real_import_claimed = any(
+        receipt.adapter_key == "rosbag2_unitree_topics"
+        and receipt.real_import_claimed
+        for receipt in trace_adapters
+    )
+    mcap_real_import_claimed = any(
+        receipt.adapter_key == "mcap_unitree_topics" and receipt.real_import_claimed
+        for receipt in trace_adapters
+    )
     safety_complete = (
         len(safety_receipts) >= 5
         and all(receipt.dispatch_veto_default for receipt in safety_receipts)
@@ -1235,6 +1362,8 @@ def build_phase4_unitree_runtime_evidence_bridge(
         mujoco_headless_step_receipt_count=1,
         mujoco_trace_row_count=len(mujoco_rows),
         trace_import_adapter_receipt_count=len(trace_adapters),
+        trace_import_unavailable_receipt_count=trace_import_unavailable_count,
+        trace_fixture_shape_only_count=trace_fixture_shape_only_count,
         safety_envelope_expansion_receipt_count=len(safety_receipts),
         operator_recovery_scenario_count=len(scenarios),
         operator_recovery_drill_receipt_count=len(drill_receipts),
@@ -1245,6 +1374,8 @@ def build_phase4_unitree_runtime_evidence_bridge(
         operator_drill_runner_complete=drill_complete,
         local_runtime_evidence_bridge_complete=complete,
         minimal_mujoco_headless_step_executed=mujoco_receipt.step_executed,
+        rosbag2_real_import_claimed=rosbag2_real_import_claimed,
+        mcap_real_import_claimed=mcap_real_import_claimed,
         denied_gates=_denied_gates(),
         remaining_evidence_blockers=[
             "ros2_colcon_build_and_generated_message_import_not_executed",

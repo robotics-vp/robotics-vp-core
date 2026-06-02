@@ -7100,3 +7100,50 @@ providers, download weights, launch pods, train models, write weights, operate
 Unitree or other hardware, publish ROS2, write SDK2 commands, mutate frozen
 Phase B math, change reward/controller equations, change physical constants,
 grant Phase 7 authority, or claim promotion-grade evidence.
+
+## 2026-06-02 — Unitree rosbag2/MCAP fail-closed trace receipts
+
+### What changed
+
+- Extended `TraceImportAdapterReceipt` with dependency/path/status fields:
+  dependency modules, missing optional modules, input-path existence,
+  fixture-shape-only posture, and `real_import_claimed`.
+- Changed rosbag2/MCAP adapter construction so external trace paths never imply
+  import execution by themselves. If `rosbag2_py` or `mcap` is missing, the
+  receipt records module-missing blockers; if a fixture path exists, it is
+  marked parser-shape-only and still non-promotional.
+- Added report-level fields:
+  `trace_import_unavailable_receipt_count`,
+  `trace_fixture_shape_only_count`, `rosbag2_real_import_claimed`, and
+  `mcap_real_import_claimed`.
+- Added focused tests for missing optional modules with fixture paths and
+  updated the Phase 4 runtime bridge script markdown output.
+
+### Current receipts
+
+```bash
+python3 -m pytest -q tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py
+python3 -m mypy src/world_model/humanoid_readiness/unitree_runtime_bridge.py src/world_model/humanoid_readiness/unitree_blocker_probes.py --show-error-codes --no-error-summary
+python3 -m ruff check src/world_model/humanoid_readiness/unitree_runtime_bridge.py scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py
+python3 -m compileall src/world_model/humanoid_readiness scripts/economic_world_model tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py -q
+python3 scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py --no-run-dependencies
+python3 scripts/economic_world_model/probe_phase4_unitree_blockers.py --output-dir /tmp/phase4_unitree_blocker_probe_codex --stress-steps 3
+```
+
+Focused pytest result: `2 passed`.
+
+The local bridge script emitted:
+
+- `trace_import_unavailable_receipt_count=2`
+- `trace_fixture_shape_only_count=0`
+- `rosbag2_real_import_claimed=false`
+- `mcap_real_import_claimed=false`
+- blocker probe: `trace_import_modules_available=false`
+
+### Boundary
+
+This closes the local unavailable-receipt posture for rosbag2/MCAP import
+adapters only. It does not install `rosbag2_py` or `mcap`, parse real bags,
+observe live streams, publish ROS2/DDS, write SDK2 commands, invoke G1Pilot,
+operate hardware, train, write weights, mutate reward/controller math, or
+claim promotion.

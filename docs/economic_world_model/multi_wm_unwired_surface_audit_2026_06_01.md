@@ -49,10 +49,12 @@ local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
 sweep now owns the live ordering for remaining local work: keep full-repo
 `mypy src/` and `ruff check .` green, then implement the provider bring-up
-readiness ledger, Unitree rosbag2/MCAP unavailable receipts, LeRobot
-video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
-Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
-bio/neuro receipt joins, and bounded Phase 7 receipt consumption.
+readiness ledger, LeRobot video-to-replay-to-perception receipt plumbing,
+Unitree event-spine refs into Phase 6.4 advisory runtime/eval receipts, neural
+trainability audit artifacts, bio/neuro receipt joins, and bounded Phase 7
+receipt consumption. Unitree rosbag2/MCAP unavailable receipts are now
+fail-closed locally and should stay green as a guardrail rather than being
+treated as real stream imports.
 Externally blocked provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and
 promotion-grade proof items remain blockers rather than local implementation
 claims.

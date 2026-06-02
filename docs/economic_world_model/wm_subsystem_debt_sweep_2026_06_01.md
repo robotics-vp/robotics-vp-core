@@ -559,8 +559,18 @@ Result: focused pytest `113 passed, 20 warnings`; smoke/help checks passed.
 The warning set is the existing process-reward hindsight warning.
 
 The residual local debt is no longer static hygiene. It is local wiring and
-audit work that can be advanced without GPU/provider/hardware execution:
-provider bring-up readiness ledger, Unitree rosbag2/MCAP unavailable receipts,
+audit work that can be advanced without GPU/provider/hardware execution.
+
+The sixteenth local debt-burn pass closed the Unitree rosbag2/MCAP unavailable
+receipt posture. `TraceImportAdapterReceipt` now records dependency modules,
+missing optional modules, input-path existence, fixture-shape-only posture, and
+`real_import_claimed`. The bridge no longer treats a present rosbag2/MCAP path
+as import execution. Current local runtime-bridge receipts report
+`trace_import_unavailable_receipt_count=2`,
+`trace_fixture_shape_only_count=0`, `rosbag2_real_import_claimed=false`, and
+`mcap_real_import_claimed=false`.
+
+Remaining local debt after this pass: provider bring-up readiness ledger,
 LeRobot video-to-replay-to-perception receipts, Unitree event spines into Phase
 6.4 advisory eval receipts, bio/neuro receipt joins, and neural trainability
 audit artifacts.
@@ -768,15 +778,7 @@ Not implemented as proof:
    - Do not: download weights, run providers, or claim provider execution
      locally.
 
-3. **Unitree rosbag2/MCAP unavailable receipt closeout**
-   - What: make rosbag2/MCAP optional imports fail closed into typed
-     unavailable/blocker receipts and fixture-only parser-shape tests.
-   - Why now: trace import blockers are local and should become explicit before
-     hardware/runtime sessions.
-   - Verify: Phase 4 bridge tests, blocker probe, static checks.
-   - Do not: claim real rosbag2/MCAP import without real files and dependencies.
-
-4. **LeRobot video to replay to perception receipts**
+3. **LeRobot video to replay to perception receipts**
    - What: normalize video/camera receipts into replay rows and perception
      samples while preserving ids, frame/step/timestamp/camera keys, sidecars,
      runtime refs, provenance, and unavailable posture.
@@ -786,7 +788,7 @@ Not implemented as proof:
    - Do not: treat placeholder/flattened CPU features as promotion-grade
      provider features.
 
-5. **Unitree event spines into Phase 6.4 advisory eval**
+4. **Unitree event spines into Phase 6.4 advisory eval**
    - What: use existing Unitree event-spine producers/refs and wire fresh
      `event_spine_ref` values into Phase 6.4 advisory runtime/eval receipts.
    - Why now: this gives transport eval better local lower-WM labels without
@@ -795,7 +797,7 @@ Not implemented as proof:
    - Do not: bypass receivers, grant authority, or claim hardware/provider
      proof.
 
-6. **Neural trainability audit**
+5. **Neural trainability audit**
    - What: emit additive JSON/JSONL/doc artifacts over neural/seam/encoder/
      policy/head/bridge/receiver/trainer surfaces with executable follow-up
      rows and plane routing.
@@ -805,7 +807,7 @@ Not implemented as proof:
    - Do not: train, write weights, or mark blocked components promotion
      eligible.
 
-7. **Bio/neuro receipt join wiring**
+6. **Bio/neuro receipt join wiring**
    - What: join the already-wired local substrate receipts into normal
      lower-WM/Economic consumption rows.
    - Why now: the substrate should become queryable evidence without
@@ -831,11 +833,13 @@ guardrails after every tranche.
 
 Further, burn down and wire all remaining local items from
 `multi_wm_unwired_surface_audit_2026_06_01.md`: provider bring-up readiness
-ledger, Unitree rosbag2/MCAP typed unavailable/blocker receipts, LeRobot
-video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
-Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
-bio/neuro receipt joins into lower-WM/Economic consumption rows, and bounded
-Phase 7 receipt consumption through existing adapters only.
+ledger, LeRobot video-to-replay-to-perception receipt plumbing, Unitree
+event-spine refs into Phase 6.4 advisory runtime/eval receipts, neural
+trainability audit artifacts, bio/neuro receipt joins into lower-WM/Economic
+consumption rows, and bounded Phase 7 receipt consumption through existing
+adapters only. Keep the now-hardened Unitree rosbag2/MCAP unavailable receipts
+green; do not claim real rosbag2/MCAP imports without real files, installed
+dependencies, and parser execution.
 
 Keep G1/bipedal whole-body primary. Treat stable-base mobile manipulation as
 fallback/degraded mode and fixed-base tabletop/workcell/dishwashing as

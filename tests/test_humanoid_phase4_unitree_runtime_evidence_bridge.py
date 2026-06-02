@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 from scripts.economic_world_model.audit_phase35_bipedal_readiness import (
@@ -22,6 +23,7 @@ from scripts.economic_world_model.prepare_phase4_unitree_runtime_evidence_bridge
 )
 from src.world_model.humanoid_readiness import (
     DENIED_UNITREE_RUNTIME_BRIDGE_AUTHORITIES,
+    build_trace_import_adapter_receipts,
     load_mujoco_headless_step_receipts,
     load_mujoco_headless_trace_rows,
     load_operator_recovery_drill_receipts,
@@ -205,6 +207,10 @@ def test_phase4_unitree_runtime_evidence_bridge_receipts(tmp_path: Path) -> None
     assert payload["ros2_runtime_readiness_receipt_count"] == 2
     assert payload["mujoco_headless_step_receipt_count"] == 1
     assert payload["trace_import_adapter_receipt_count"] == 3
+    assert payload["trace_import_unavailable_receipt_count"] == 2
+    assert payload["trace_fixture_shape_only_count"] == 0
+    assert payload["rosbag2_real_import_claimed"] is False
+    assert payload["mcap_real_import_claimed"] is False
     assert payload["safety_envelope_expansion_receipt_count"] == 5
     assert payload["operator_recovery_scenario_count"] == 4
     assert payload["operator_recovery_drill_receipt_count"] == 4
@@ -257,8 +263,13 @@ def test_phase4_unitree_runtime_evidence_bridge_receipts(tmp_path: Path) -> None
     by_adapter = {receipt.adapter_key: receipt for receipt in adapters}
     assert by_adapter["jsonl_unitree_trace_bundle"].import_executed is True
     assert by_adapter["jsonl_unitree_trace_bundle"].rows_imported >= 1
+    assert by_adapter["jsonl_unitree_trace_bundle"].status == "ok_jsonl_trace_bundle_imported"
     assert by_adapter["rosbag2_unitree_topics"].import_executed is False
+    assert by_adapter["rosbag2_unitree_topics"].real_import_claimed is False
+    assert by_adapter["rosbag2_unitree_topics"].parser_shape_only is False
     assert by_adapter["mcap_unitree_topics"].import_executed is False
+    assert by_adapter["mcap_unitree_topics"].real_import_claimed is False
+    assert by_adapter["mcap_unitree_topics"].parser_shape_only is False
     assert "rosbag2_input_path_missing" in by_adapter["rosbag2_unitree_topics"].blockers
     assert "mcap_input_path_missing" in by_adapter["mcap_unitree_topics"].blockers
 
@@ -289,3 +300,51 @@ def test_phase4_unitree_runtime_evidence_bridge_receipts(tmp_path: Path) -> None
     assert not any(receipt.teleop_runtime_executed for receipt in drills)
     assert not any(receipt.command_dispatch_allowed for receipt in drills)
     assert not any(receipt.hardware_executed for receipt in drills)
+
+
+def test_trace_import_adapters_fail_closed_for_missing_optional_modules(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    traces = tmp_path / "trace_fixture"
+    _write(
+        traces / "unitree_low_state_traces_v1.jsonl",
+        '{"trace_id":"low_state_fixture","tick":1}\n',
+    )
+    rosbag2_fixture = tmp_path / "unitree_fixture.db3"
+    mcap_fixture = tmp_path / "unitree_fixture.mcap"
+    _write(rosbag2_fixture, "fixture-only rosbag2 shape\n")
+    _write(mcap_fixture, "fixture-only mcap shape\n")
+
+    original_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name: str, *args, **kwargs):
+        if name in {"rosbag2_py", "mcap"}:
+            return None
+        return original_find_spec(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib.util, "find_spec", fake_find_spec)
+
+    receipts = build_trace_import_adapter_receipts(
+        trace_dir=traces,
+        rosbag2_path=rosbag2_fixture,
+        mcap_path=mcap_fixture,
+    )
+
+    by_adapter = {receipt.adapter_key: receipt for receipt in receipts}
+    assert by_adapter["jsonl_unitree_trace_bundle"].import_executed is True
+    for adapter_key, module_name in (
+        ("rosbag2_unitree_topics", "rosbag2_py"),
+        ("mcap_unitree_topics", "mcap"),
+    ):
+        receipt = by_adapter[adapter_key]
+        assert receipt.input_path_exists is True
+        assert receipt.fixture_shape_validated is True
+        assert receipt.parser_shape_only is True
+        assert receipt.dependency_available is False
+        assert receipt.missing_dependency_modules == [module_name]
+        assert f"{module_name}_module_missing" in receipt.blockers
+        assert receipt.import_executed is False
+        assert receipt.real_import_claimed is False
+        assert receipt.live_stream_observed is False
+        assert receipt.hardware_executed is False

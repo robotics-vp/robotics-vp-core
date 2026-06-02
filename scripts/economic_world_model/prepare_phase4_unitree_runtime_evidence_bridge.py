@@ -172,6 +172,14 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
         f"- MuJoCo trace rows: `{payload['mujoco_trace_row_count']}`",
         f"- Trace adapter receipts: "
         f"`{payload['trace_import_adapter_receipt_count']}`",
+        "- Trace unavailable receipts: "
+        f"`{payload['trace_import_unavailable_receipt_count']}`",
+        "- Trace fixture-shape-only receipts: "
+        f"`{payload['trace_fixture_shape_only_count']}`",
+        "- rosbag2 real import claimed: "
+        f"`{str(payload['rosbag2_real_import_claimed']).lower()}`",
+        "- MCAP real import claimed: "
+        f"`{str(payload['mcap_real_import_claimed']).lower()}`",
         f"- Safety envelope receipts: "
         f"`{payload['safety_envelope_expansion_receipt_count']}`",
         f"- Operator drill receipts: "

@@ -4540,3 +4540,28 @@ Verification for the Phase-5.1 pass:
   pods, operate Unitree or other hardware, publish ROS2, write SDK2 commands,
   mutate reward/controller math, change physical constants, grant Phase 7
   authority, or claim promotion-grade evidence.
+
+### 2026-06-02: Unitree rosbag2/MCAP fail-closed trace receipts
+
+- Hardened the Phase 4 Unitree runtime-evidence bridge so rosbag2/MCAP trace
+  adapters no longer treat a present path as import execution. External trace
+  adapters now emit typed dependency/path/status fields, missing optional
+  modules, fixture-shape-only flags, and `real_import_claimed=false` until real
+  parser execution exists.
+- Added focused coverage for fixture paths with missing `rosbag2_py`/`mcap`:
+  fixture files validate parser shape only, keep `import_executed=false`, keep
+  live/hardware gates false, and record explicit module-missing blockers.
+- Current local bridge receipt result:
+  - `trace_import_unavailable_receipt_count=2`
+  - `trace_fixture_shape_only_count=0`
+  - `rosbag2_real_import_claimed=false`
+  - `mcap_real_import_claimed=false`
+- Verification receipts:
+  - `python3 -m pytest -q tests/test_humanoid_phase4_unitree_runtime_evidence_bridge.py`: `2 passed`
+  - `python3 scripts/economic_world_model/prepare_phase4_unitree_runtime_evidence_bridge.py --no-run-dependencies`: pass
+  - `python3 scripts/economic_world_model/probe_phase4_unitree_blockers.py --output-dir /tmp/phase4_unitree_blocker_probe_codex --stress-steps 3`: pass; `trace_import_modules_available=false`
+  - focused mypy/ruff/compile checks for the touched Unitree bridge surfaces: pass
+- Boundary preserved: no ROS2/DDS publish, SDK2 write, G1Pilot invocation,
+  hardware execution, live policy control, training, weight write, reward
+  mutation, provider execution, rosbag2/MCAP real stream import, or promotion
+  was claimed.

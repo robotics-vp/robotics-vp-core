@@ -94,7 +94,10 @@ The runtime-evidence bridge now materializes
 `artifacts/economic_world_model/phase4_unitree_runtime_evidence_bridge/phase4_unitree_runtime_evidence_bridge_report_v1.json`.
 It adds ROS2/colcon readiness receipts, rosbag2/MCAP import adapters, expanded
 safety envelope receipts, scripted operator recovery drills, and a guarded
-no-policy Unitree MuJoCo headless step.
+no-policy Unitree MuJoCo headless step. The rosbag2/MCAP adapters now fail
+closed into dependency/path/status receipts with `real_import_claimed=false`
+until real stream files, optional dependencies, and parser execution are
+present.
 
 On the current host, that bridge emitted 5 MuJoCo headless trace rows. This is
 useful narrow simulation evidence, but it is still not ROS2 bridge execution,

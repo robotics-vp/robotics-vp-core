@@ -34,6 +34,10 @@ Current result:
 - `minimal_mujoco_headless_step_executed=true`
 - `mujoco_trace_row_count=5`
 - `trace_ingestion_adapters_complete=true`
+- `trace_import_unavailable_receipt_count=2`
+- `trace_fixture_shape_only_count=0`
+- `rosbag2_real_import_claimed=false`
+- `mcap_real_import_claimed=false`
 - `safety_envelope_expansion_complete=true`
 - `operator_drill_runner_complete=true`
 - `ros2_runtime_readiness_receipt_count=2`
@@ -60,7 +64,7 @@ Denied gates remain explicit:
 | --- | --- | --- |
 | ROS2 / colcon readiness | Native and container profile receipts exist with build/import commands, generated-message import checks, package/message inventory, and missing-tool truth | Install/source ROS2 and colcon, run `colcon build`, source generated setup, import generated Unitree messages |
 | MuJoCo headless step | Python `mujoco` loaded Unitree G1 `scene_29dof.xml` and emitted 5 no-policy step rows | ROS2 bridge, policy control, command echo, contact/task metrics, longer sim traces |
-| Trace ingestion | Existing JSONL traces import through the typed trace bundle; rosbag2 and MCAP adapters are materialized | Real rosbag2 or MCAP files from sim/hardware streams |
+| Trace ingestion | Existing JSONL traces import through the typed trace bundle; rosbag2 and MCAP adapters now fail closed into dependency/path/status receipts with `real_import_claimed=false` unless a real parser execution exists | Real rosbag2 or MCAP files from sim/hardware streams plus installed `rosbag2_py`/`mcap` and parser execution |
 | Safety envelope | Joint clamp, self-collision hook, fall/posture guard, stop-distance slot, and calibrated-limit sidecar receipts exist | Calibrated robot limits, collision geometry validation, measured stop distance |
 | Operator recovery | Scenario files and local drill receipts cover stale stream, e-stop latch, low balance margin, and teleop takeover | Runtime teleop stack, operator drill traces, sim/hardware recovery outcomes |
 
@@ -70,7 +74,8 @@ Denied gates remain explicit:
   `ros2`; the container profile currently records missing `docker`.
 - `ros2_colcon_build_and_generated_message_import_not_executed`
 - `ros2_sdk2_g1pilot_command_echo_missing`
-- `rosbag2_or_mcap_real_stream_import_missing`
+- `rosbag2_or_mcap_real_stream_import_missing`; current rosbag2/MCAP receipts
+  are unavailable/blocker receipts, not real stream imports
 - `policy_controlled_mujoco_or_hardware_trace_missing`
 - `physical_stop_distance_and_calibrated_safety_limits_missing`
 - `operator_teleop_runtime_drill_missing`
