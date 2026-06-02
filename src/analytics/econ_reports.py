@@ -11,7 +11,7 @@ import numpy as np
 
 from src.economics.arh_config import ARHPenaltyConfig, current_arh_config
 from src.ontology.store import OntologyStore
-from src.ontology.models import Task, Episode, EconVector, Datapack
+from src.ontology.models import EconVector, Datapack
 from src.policies.registry import build_all_policies
 from src.vision.motion_hierarchy.metrics import (
     compute_motion_hierarchy_summary_from_raw,
@@ -260,7 +260,8 @@ def compute_task_econ_summary(
             successes += 1
         elif ep.status == "failure":
             failures += 1
-        dp_ref = datapack_map.get(getattr(ep, "datapack_id", None))
+        datapack_id = getattr(ep, "datapack_id", None)
+        dp_ref = datapack_map.get(str(datapack_id)) if datapack_id is not None else None
         dp_rating = getattr(dp_ref, "auditor_rating", None) if dp_ref else None
         if dp_rating and ev:
             bucket = econ_by_rating.setdefault(
@@ -287,7 +288,7 @@ def compute_task_econ_summary(
         if phase:
             phase_counts[phase] = phase_counts.get(phase, 0) + 1
 
-    summary = {
+    summary: Dict[str, Any] = {
         "task": {
             "task_id": task.task_id,
             "name": task.name,
@@ -859,7 +860,7 @@ def compute_nag_edit_surface_summary(
         # Average NAG difficulty features
         features = difficulty_by_edit.get(edit_type, [])
         if features:
-            all_keys = set()
+            all_keys: set[str] = set()
             for f in features:
                 all_keys.update(f.keys())
 
@@ -936,9 +937,6 @@ def compute_nag_counterfactual_mpl_analysis(
         base_id = cf.get("base_episode_id", "")
         if base_id not in base_mpl_by_id:
             continue
-
-        base_mpl = base_mpl_by_id[base_id]
-        cf_mpl = _safe_float(cf.get("estimated_mpl", base_mpl))  # Use base if no estimate
 
         # Estimate MPL change based on edit complexity
         edits = cf.get("nag_edit_vector", [])

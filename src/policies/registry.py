@@ -21,7 +21,6 @@ from src.policies.orchestrator_policy import HeuristicOrchestratorPolicy
 from src.policies.sampler_weights import HeuristicSamplerWeightPolicy
 from src.policies.meta_advisor import HeuristicMetaAdvisorPolicy
 from src.policies.vision_encoder import HeuristicVisionEncoderPolicy
-from src.policies.vision_encoder import HeuristicVisionEncoderPolicy
 from src.policies.reward_model_heuristic import HeuristicRewardModelPolicy
 from src.policies.datapack_auditor import HeuristicDatapackAuditor
 
@@ -169,7 +168,7 @@ class PolicyRegistry:
             from src.rl.hydra_heads import HydraPolicy  # Local import to avoid circulars
 
             head = (entry.heads or {}).get(skill_mode)
-            if head is None:
+            if head is None and entry.default_skill_mode is not None:
                 head = (entry.heads or {}).get(entry.default_skill_mode)
             if head is None:
                 raise KeyError(f"No head found for skill_mode={skill_mode}")

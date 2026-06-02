@@ -13,9 +13,15 @@ from src.evidence.gen2sim_validity import (
     build_gen2sim_feature_vector,
 )
 
+torch: Any
+nn: Any
+
 try:
-    import torch
-    import torch.nn as nn
+    import torch as _torch
+    import torch.nn as _torch_nn
+
+    torch = _torch
+    nn = _torch_nn
 
     class LearnedGen2SimValidityModel(nn.Module):
         """Small MLP that predicts bounded validity and value-support scores."""
@@ -92,6 +98,7 @@ try:
 except ImportError:  # pragma: no cover - explicit failure paths below
     TORCH_AVAILABLE = False
     torch = None
+    nn = None
 
     class LearnedGen2SimValidityModel:  # type: ignore[no-redef]
         def __init__(self, *args: Any, **kwargs: Any) -> None:

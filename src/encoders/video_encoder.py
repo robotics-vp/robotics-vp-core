@@ -18,7 +18,6 @@ Usage:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 class Simple2DCNN(nn.Module):
     """
@@ -213,13 +212,21 @@ class VideoEncoder(nn.Module):
             raise ValueError(f"Unknown architecture: {arch}. Choose from {list(self.ARCHITECTURES.keys())}")
 
         # Build encoder
+        self.encoder: nn.Module
         if arch == 'r3d18':
             self.encoder = R3D18Encoder(latent_dim=latent_dim, pretrained=pretrained)
-        else:
-            self.encoder = self.ARCHITECTURES[arch](
+        elif arch == 'simple2dcnn':
+            self.encoder = Simple2DCNN(
                 input_channels=input_channels,
                 latent_dim=latent_dim
             )
+        elif arch == 'simple3dcnn':
+            self.encoder = Simple3DCNN(
+                input_channels=input_channels,
+                latent_dim=latent_dim
+            )
+        else:
+            raise ValueError(f"Unknown architecture: {arch}. Choose from {list(self.ARCHITECTURES.keys())}")
 
     def forward(self, x):
         """

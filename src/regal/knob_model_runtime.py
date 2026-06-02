@@ -25,8 +25,12 @@ from src.regal.knob_model_training import (
     build_knob_feature_vector,
 )
 
+torch: Any
+
 if TORCH_AVAILABLE:  # pragma: no branch
-    import torch
+    import torch as _torch
+
+    torch = _torch
 else:  # pragma: no cover
     torch = None
 

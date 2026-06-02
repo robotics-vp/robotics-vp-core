@@ -27,7 +27,7 @@ Usage:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from src.encoders.video_encoder import VideoEncoder
 
@@ -72,6 +72,7 @@ class AlignedVideoEncoder(nn.Module):
 
         # Optional projection head for alignment
         # (Allows encoder output to differ from alignment space)
+        self.projection: nn.Module
         if projection_dim is not None and projection_dim != latent_dim:
             self.projection = nn.Sequential(
                 nn.Linear(latent_dim, projection_dim),
@@ -166,7 +167,7 @@ class AlignedVideoEncoder(nn.Module):
     def distillation_step(
         self,
         video: torch.Tensor,
-        teacher: nn.Module,
+        teacher: Any,
         alpha: float = 1.0,
     ) -> Tuple[torch.Tensor, torch.Tensor, dict]:
         """

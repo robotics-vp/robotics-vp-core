@@ -4432,3 +4432,30 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: this was typed/static/smoke hygiene only. It did not
   mutate Phase B math, reward/controller equations, train models, write
   weights, run providers/GPU/hardware, or claim promotion.
+
+### 2026-06-01: WM support-surface static debt burn-down through policies
+
+- Cleared focused ruff, mypy, compile, and focused tests or CPU smoke for the
+  next support-surface tier:
+  `src/regal`, `src/analytics`, `src/encoders`, `src/evidence`, and
+  `src/policies`.
+- Roles preserved:
+  - `src/regal`: receipt/governance substrate and promotion-gate support
+  - `src/analytics`: economics-reporting and curriculum/reporting substrate
+  - `src/encoders`: trainer/runtime encoder lane, CPU smoke only
+  - `src/evidence`: benchmark/precondition/evidence substrate
+  - `src/policies`: heuristic policy-registry and trainer/runtime policy lane
+- Current residual static debt after the policy pass:
+  - broad mypy: 44 `error:` records across 28 files
+  - broad ruff: 134 issues across 88 files
+- Focused receipts:
+  - Regal tests: `106 passed`
+  - Analytics tests: `19 passed`
+  - Encoder CPU smoke: simple 2D/3D and aligned projection forwards passed
+  - Evidence tests: `22 passed`
+  - Policy tests: `46 passed`
+  - Aggregate focused support-tier suite: `193 passed`
+- Boundary preserved: this was local typed/static/smoke hygiene only. It did
+  not train models, write weights, run providers, launch pods, operate
+  hardware, mutate reward/controller math, change promotion gates, or grant
+  Phase 7 authority.

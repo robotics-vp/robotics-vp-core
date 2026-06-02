@@ -81,10 +81,10 @@ class RegalDataValueNode(RegalNode):
         task_id = str(context.get("task_id", "unknown_task"))
         env_id = str(context.get("env_id", "unknown_env"))
         profile_id = str(context.get("profile_id", "default"))
-        compute_cost = float(context.get("compute_cost", 1.0) or 1.0)
+        compute_cost = _as_float(context.get("compute_cost"), 1.0)
 
-        plausibility = float(context.get("plausibility_score", 1.0) or 1.0)
-        reward_safety = float(context.get("reward_safety_score", 1.0) or 1.0)
+        plausibility = _as_float(context.get("plausibility_score"), 1.0)
+        reward_safety = _as_float(context.get("reward_safety_score"), 1.0)
         helper_runtime, helper_status = self._resolve_gen2sim_helper(context)
         gen2sim_assessment = resolve_gen2sim_validity_assessment(
             context,
@@ -150,3 +150,18 @@ class RegalDataValueNode(RegalNode):
             recommended_action="promote_datapack",
             confidence=0.85,
         )
+
+
+def _as_float(value: object, default: float) -> float:
+    try:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            return float(value)
+        return default
+    except (TypeError, ValueError):
+        return default

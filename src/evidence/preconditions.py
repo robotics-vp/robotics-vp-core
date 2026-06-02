@@ -27,6 +27,13 @@ def _has_value(value: Any) -> bool:
     return True
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 @dataclass(frozen=True)
 class PreconditionCheck:
     """One typed readiness/precondition check."""
@@ -216,11 +223,8 @@ def build_execution_preconditions(
 
     for key, threshold in sorted(dict(min_signal_thresholds or {}).items()):
         value = signals.get(str(key))
-        satisfied = False
-        try:
-            satisfied = float(value) >= float(threshold)
-        except Exception:
-            satisfied = False
+        threshold_value = _safe_float(threshold)
+        satisfied = _safe_float(value) >= threshold_value
         checks.append(
             PreconditionCheck(
                 precondition_id=f"signal_min::{key}",
@@ -228,17 +232,14 @@ def build_execution_preconditions(
                 hard=True,
                 detail="min_signal_threshold" if satisfied else "signal_below_min",
                 observed_value=value,
-                expected_value=float(threshold),
+                expected_value=threshold_value,
             )
         )
 
     for key, threshold in sorted(dict(soft_min_signal_thresholds or {}).items()):
         value = signals.get(str(key))
-        satisfied = False
-        try:
-            satisfied = float(value) >= float(threshold)
-        except Exception:
-            satisfied = False
+        threshold_value = _safe_float(threshold)
+        satisfied = _safe_float(value) >= threshold_value
         checks.append(
             PreconditionCheck(
                 precondition_id=f"signal_min::{key}",
@@ -246,17 +247,14 @@ def build_execution_preconditions(
                 hard=False,
                 detail="optional_min_signal_threshold" if satisfied else "optional_signal_below_min",
                 observed_value=value,
-                expected_value=float(threshold),
+                expected_value=threshold_value,
             )
         )
 
     for key, threshold in sorted(dict(max_signal_thresholds or {}).items()):
         value = signals.get(str(key))
-        satisfied = False
-        try:
-            satisfied = float(value) <= float(threshold)
-        except Exception:
-            satisfied = False
+        threshold_value = _safe_float(threshold)
+        satisfied = _safe_float(value) <= threshold_value
         checks.append(
             PreconditionCheck(
                 precondition_id=f"signal_max::{key}",
@@ -264,17 +262,14 @@ def build_execution_preconditions(
                 hard=True,
                 detail="max_signal_threshold" if satisfied else "signal_above_max",
                 observed_value=value,
-                expected_value=float(threshold),
+                expected_value=threshold_value,
             )
         )
 
     for key, threshold in sorted(dict(soft_max_signal_thresholds or {}).items()):
         value = signals.get(str(key))
-        satisfied = False
-        try:
-            satisfied = float(value) <= float(threshold)
-        except Exception:
-            satisfied = False
+        threshold_value = _safe_float(threshold)
+        satisfied = _safe_float(value) <= threshold_value
         checks.append(
             PreconditionCheck(
                 precondition_id=f"signal_max::{key}",
@@ -282,7 +277,7 @@ def build_execution_preconditions(
                 hard=False,
                 detail="optional_max_signal_threshold" if satisfied else "optional_signal_above_max",
                 observed_value=value,
-                expected_value=float(threshold),
+                expected_value=threshold_value,
             )
         )
 

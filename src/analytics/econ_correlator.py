@@ -182,7 +182,7 @@ class EconCorrelator:
                  
                  # Try to compute p-value if scipy is available
                  try:
-                     from scipy.stats import pearsonr
+                     from scipy.stats import pearsonr  # type: ignore[import-untyped]
                      r, p = pearsonr(q_arr, m_arr)
                      stats_meta["p_value"] = float(p)
                      stats_meta["scene_quality_vs_mpl"] = float(r) # usage of scipy result
@@ -210,4 +210,3 @@ def save_trust_matrix(matrix: Dict[str, Any], path: Optional[str] = None) -> Pat
     with tm_path.open("w") as f:
         json.dump(matrix, f, indent=2, sort_keys=True)
     return tm_path
-

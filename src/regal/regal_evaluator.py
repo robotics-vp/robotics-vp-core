@@ -680,7 +680,6 @@ class EconDataRegal(RegalNode):
 
         # Prefer passed econ_tensor param over context lookup
         tensor = econ_tensor
-        econ_basis_sha = context.econ_basis_sha if context else None
 
         if tensor is None:
             # No econ tensor provided - pass with warning

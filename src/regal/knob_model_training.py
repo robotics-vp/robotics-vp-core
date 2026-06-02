@@ -67,9 +67,15 @@ KNOB_FEATURE_NAMES = [
     "task_family_inspection",
 ]
 
+torch: Any
+nn: Any
+
 try:
-    import torch
-    import torch.nn as nn
+    import torch as _torch
+    import torch.nn as _torch_nn
+
+    torch = _torch
+    nn = _torch_nn
 
     TORCH_AVAILABLE = True
 except ImportError:  # pragma: no cover - explicit failures in training caller

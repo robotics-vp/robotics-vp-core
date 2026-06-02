@@ -6873,3 +6873,71 @@ This tranche is local static and smoke hygiene only. It does not run providers,
 launch pods, train models, write weights, operate Unitree or other hardware,
 mutate frozen Phase B math, change reward/controller equations, grant Phase 7
 authority, or claim promotion-grade evidence.
+
+## 2026-06-01 — Support-surface static debt burn-down through policies
+
+### What changed
+
+- Cleared `src/regal` static debt by typing optional torch aliases in learned
+  knob helpers, narrowing generic context values before float conversion, and
+  removing a dead econ-basis local. Regal remains advisory governance and
+  promotion-gate support; no promotion gate behavior changed.
+- Cleared `src/analytics` static debt by typing accumulators and report
+  summaries, marking optional SciPy correlation import truth, narrowing
+  datapack ids, and removing unused report locals/imports. Analytics remains
+  economics-reporting and curriculum/reporting substrate.
+- Cleared `src/encoders` static debt by typing encoder/projection module
+  fields, narrowing duck-typed teacher adapters, and removing unused optional
+  imports. The verification was CPU smoke only; no encoder training or weight
+  writes occurred.
+- Cleared `src/evidence` static debt by adding safe precondition float
+  coercion and typing optional Gen2Sim validity torch aliases. Evidence
+  surfaces remain receipt/precondition substrate, not provider truth.
+- Cleared `src/policies` static debt by typing optional trust matrices,
+  narrowing MetaTransformer helper mode, removing duplicate imports, and
+  guarding hydra fallback keys. Heuristic policy behavior and reward math were
+  preserved.
+
+### Current receipts
+
+Focused checks now passing:
+
+```bash
+python3 -m ruff check src/regal
+python3 -m mypy --follow-imports=silent src/regal --show-error-codes --no-error-summary
+python3 -m compileall src/regal -q
+python3 -m pytest -q tests/test_regal_uses_econ_tensor.py tests/test_regal_promotion_policy.py tests/test_regal_gates.py tests/test_regal_reports_provenance.py tests/test_regal_objective_integrity_blocks_early_scalarization.py tests/test_econ_data_regal.py tests/test_regal_training_runner.py tests/test_econ_regal_sampling.py tests/test_regal_phases.py tests/test_regal_gates_patience.py tests/test_governance_assessment.py tests/test_bio_neuro_substrate.py
+
+python3 -m ruff check src/analytics
+python3 -m mypy --follow-imports=silent src/analytics --show-error-codes --no-error-summary
+python3 -m compileall src/analytics -q
+python3 -m pytest -q tests/analytics tests/test_econ_reports.py tests/smoke_tests/test_pricing_report_cli.py
+
+python3 -m ruff check src/encoders
+python3 -m mypy --follow-imports=silent src/encoders --show-error-codes --no-error-summary
+python3 -m compileall src/encoders -q
+
+python3 -m ruff check src/evidence
+python3 -m mypy --follow-imports=silent src/evidence --show-error-codes --no-error-summary
+python3 -m compileall src/evidence -q
+python3 -m pytest -q tests/test_evidence_bus.py tests/test_gen2sim_validity.py tests/test_train_gen2sim_validity.py tests/test_benchmark_gating.py tests/test_economic_wm_evidence_hygiene.py tests/test_perception_benchmark_evidence_emitter.py tests/test_provider_adapter_benchmark_evidence_emitter.py tests/test_vla_semantic_evidence.py
+
+python3 -m ruff check src/policies
+python3 -m mypy --follow-imports=silent src/policies --show-error-codes --no-error-summary
+python3 -m compileall src/policies -q
+python3 -m pytest -q tests/test_sampler_policy.py tests/test_train_sampler_policy.py tests/test_unified_quality_policy_backward_compat.py tests/test_shadow_replay_policy.py tests/test_vla_backend_policy.py tests/test_plan_policy.py tests/test_semantic_policy.py tests/test_pricing_sentinel.py tests/test_orchestrator_shell_policy.py tests/test_queue_dispatch_policy.py tests/test_fill_path_policy.py tests/test_pipeline_stage_policy.py tests/test_datapack_value_node_integration.py
+```
+
+Residual full-repo scans after the policy pass:
+
+- broad mypy: 44 `error:` records across 28 files
+- broad ruff: 134 issues across 88 files
+- aggregate focused support-tier suite: `193 passed`
+
+### Boundary
+
+This tranche is local typed/static/smoke hygiene only. It does not run
+providers, launch pods, train models, write weights, operate Unitree or other
+hardware, mutate frozen Phase B math, change reward/controller equations,
+change promotion gates, grant Phase 7 authority, or claim promotion-grade
+evidence.

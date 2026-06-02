@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -77,8 +77,6 @@ def compute_eval_metrics(
     # Extract arrays
     ir_loss = scene_tracks_data.get(f"{prefix}ir_loss", np.array([]))
     converged = scene_tracks_data.get(f"{prefix}converged", np.array([]))
-    visibility = scene_tracks_data.get(f"{prefix}visibility", np.array([]))
-    
     # Get dimensions
     if ir_loss.ndim == 2:
         T, K = ir_loss.shape
@@ -89,7 +87,7 @@ def compute_eval_metrics(
     summary_json = scene_tracks_data.get(f"{prefix}summary_json", np.array(["{}"]))[0]
     try:
         summary = json.loads(str(summary_json))
-    except:
+    except (TypeError, ValueError, json.JSONDecodeError):
         summary = {}
     
     id_switches = summary.get("id_switch_count", 0)

@@ -44,14 +44,15 @@ Observed results:
 
 ## Current Local Queue Ownership
 
-After the support-surface static debt burn-down through HRL, the current local
-queue from this audit is folded into
+After the support-surface static debt burn-down through policies, the current
+local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
 sweep now owns the live ordering for remaining local work: full-repo mypy/ruff
-cleanup, provider bring-up readiness ledger, bio/neuro receipt joins, bounded
-Phase 7 receipt consumption, and script/smoke hygiene. Externally blocked
-provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and promotion-grade proof
-items remain blockers rather than local implementation claims.
+cleanup starting with the remaining 4-error support families, provider bring-up
+readiness ledger, bio/neuro receipt joins, bounded Phase 7 receipt consumption,
+and script/smoke hygiene. Externally blocked provider, GPU, RunPod, ROS2/SDK2,
+Unitree hardware, and promotion-grade proof items remain blockers rather than
+local implementation claims.
 
 ## Bio / Neuro Substrate Status
 

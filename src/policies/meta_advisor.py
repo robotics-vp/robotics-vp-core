@@ -3,7 +3,7 @@ Heuristic MetaAdvisorPolicy wrapping existing MetaTransformer.
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 import numpy as np
 
@@ -13,7 +13,12 @@ from src.utils.json_safe import to_json_safe
 
 
 class HeuristicMetaAdvisorPolicy(MetaAdvisorPolicy):
-    def __init__(self, *, helper_package_path: str | None = None, helper_mode: str = "auto"):
+    def __init__(
+        self,
+        *,
+        helper_package_path: str | None = None,
+        helper_mode: Literal["disabled", "auto", "required"] = "auto",
+    ):
         self._impl = MetaTransformer(
             helper_package_path=helper_package_path,
             helper_mode=helper_mode,

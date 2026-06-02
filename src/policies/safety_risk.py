@@ -3,7 +3,7 @@ Heuristic SafetyRiskPolicy that mirrors existing reward component usage.
 
 Summarizes collision/damage components without altering scalar rewards.
 """
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from src.policies.interfaces import SafetyRiskPolicy
 from src.utils.json_safe import to_json_safe
@@ -27,7 +27,7 @@ def _components(event: Any) -> Dict[str, Any]:
 
 
 class HeuristicSafetyRiskPolicy(SafetyRiskPolicy):
-    def __init__(self, trust_matrix: Dict[str, Any] = None):
+    def __init__(self, trust_matrix: Optional[Dict[str, Any]] = None):
         self.trust_matrix = trust_matrix or {}
 
     def build_features(self, events: Sequence[Any]) -> Dict[str, Any]:

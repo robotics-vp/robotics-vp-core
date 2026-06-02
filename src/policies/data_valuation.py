@@ -28,7 +28,7 @@ def _as_dict(obj: Any) -> Dict[str, Any]:
 
 
 class HeuristicDataValuationPolicy(DataValuationPolicy):
-    def __init__(self, trust_matrix: Dict[str, Any] = None):
+    def __init__(self, trust_matrix: Optional[Dict[str, Any]] = None):
         self.trust_matrix = trust_matrix or {}
 
     def build_features(

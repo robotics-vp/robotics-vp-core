@@ -11,7 +11,7 @@ Includes process_reward-based sampling strategies:
 - "epiplexity_roi": Weight by epiplexity delta per flop (w_epi)
 - "inferential_yield": Weight by compiled signal yield / inferential replay weight
 """
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from src.policies.interfaces import SamplerWeightPolicy
 from src.rl import episode_sampling as sampler_utils
@@ -127,7 +127,7 @@ def _inferential_yield_weight(ep: Dict[str, Any]) -> float:
 
 
 class HeuristicSamplerWeightPolicy(SamplerWeightPolicy):
-    def __init__(self, trust_matrix: Dict[str, Any] = None):
+    def __init__(self, trust_matrix: Optional[Dict[str, Any]] = None):
         self.trust_matrix = trust_matrix or {}
 
     def build_features(self, descriptors: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:

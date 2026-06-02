@@ -341,6 +341,141 @@ python3 -m pytest -q \
 
 Result: `292 passed, 22 warnings`.
 
+The twelfth local debt-burn pass cleared the next support-surface tier:
+`src/regal`, `src/analytics`, `src/encoders`, `src/evidence`, and
+`src/policies`. This was governance, economics-reporting, encoder,
+precondition/evidence, and policy-registry hygiene only: optional torch aliases
+are explicit, generic context values are narrowed before float conversion,
+summary/report containers are typed, direct encoder module fields are typed as
+`nn.Module`, and safe unused import/local cleanup was applied. It did not run
+providers, train models, write weights, change promotion gates, mutate reward
+math, or grant policy/Phase 7 authority.
+
+The following support-tier checks now pass:
+
+```bash
+python3 -m ruff check src/regal
+python3 -m mypy --follow-imports=silent src/regal \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/regal -q
+python3 -m pytest -q \
+  tests/test_regal_uses_econ_tensor.py \
+  tests/test_regal_promotion_policy.py \
+  tests/test_regal_gates.py \
+  tests/test_regal_reports_provenance.py \
+  tests/test_regal_objective_integrity_blocks_early_scalarization.py \
+  tests/test_econ_data_regal.py \
+  tests/test_regal_training_runner.py \
+  tests/test_econ_regal_sampling.py \
+  tests/test_regal_phases.py \
+  tests/test_regal_gates_patience.py \
+  tests/test_governance_assessment.py \
+  tests/test_bio_neuro_substrate.py
+
+python3 -m ruff check src/analytics
+python3 -m mypy --follow-imports=silent src/analytics \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/analytics -q
+python3 -m pytest -q \
+  tests/analytics \
+  tests/test_econ_reports.py \
+  tests/smoke_tests/test_pricing_report_cli.py
+
+python3 -m ruff check src/encoders
+python3 -m mypy --follow-imports=silent src/encoders \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/encoders -q
+python3 - <<'PY'
+import torch
+from src.encoders.video_encoder import VideoEncoder
+from src.encoders.student_video_encoder import AlignedVideoEncoder
+for arch in ["simple2dcnn", "simple3dcnn"]:
+    enc = VideoEncoder(latent_dim=16, arch=arch, input_channels=3)
+    assert tuple(enc(torch.randn(2, 4, 3, 32, 32)).shape) == (2, 16)
+student = AlignedVideoEncoder(latent_dim=16, arch="simple2dcnn", projection_dim=8)
+z, zp = student.forward_with_projection(torch.randn(2, 4, 3, 32, 32))
+assert tuple(z.shape) == (2, 16)
+assert tuple(zp.shape) == (2, 16)
+PY
+
+python3 -m ruff check src/evidence
+python3 -m mypy --follow-imports=silent src/evidence \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/evidence -q
+python3 -m pytest -q \
+  tests/test_evidence_bus.py \
+  tests/test_gen2sim_validity.py \
+  tests/test_train_gen2sim_validity.py \
+  tests/test_benchmark_gating.py \
+  tests/test_economic_wm_evidence_hygiene.py \
+  tests/test_perception_benchmark_evidence_emitter.py \
+  tests/test_provider_adapter_benchmark_evidence_emitter.py \
+  tests/test_vla_semantic_evidence.py
+
+python3 -m ruff check src/policies
+python3 -m mypy --follow-imports=silent src/policies \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/policies -q
+python3 -m pytest -q \
+  tests/test_sampler_policy.py \
+  tests/test_train_sampler_policy.py \
+  tests/test_unified_quality_policy_backward_compat.py \
+  tests/test_shadow_replay_policy.py \
+  tests/test_vla_backend_policy.py \
+  tests/test_plan_policy.py \
+  tests/test_semantic_policy.py \
+  tests/test_pricing_sentinel.py \
+  tests/test_orchestrator_shell_policy.py \
+  tests/test_queue_dispatch_policy.py \
+  tests/test_fill_path_policy.py \
+  tests/test_pipeline_stage_policy.py \
+  tests/test_datapack_value_node_integration.py
+```
+
+The aggregate focused suite for this support-tier pass also passes:
+
+```bash
+python3 -m pytest -q \
+  tests/test_regal_uses_econ_tensor.py \
+  tests/test_regal_promotion_policy.py \
+  tests/test_regal_gates.py \
+  tests/test_regal_reports_provenance.py \
+  tests/test_regal_objective_integrity_blocks_early_scalarization.py \
+  tests/test_econ_data_regal.py \
+  tests/test_regal_training_runner.py \
+  tests/test_econ_regal_sampling.py \
+  tests/test_regal_phases.py \
+  tests/test_regal_gates_patience.py \
+  tests/test_governance_assessment.py \
+  tests/test_bio_neuro_substrate.py \
+  tests/analytics \
+  tests/test_econ_reports.py \
+  tests/smoke_tests/test_pricing_report_cli.py \
+  tests/test_evidence_bus.py \
+  tests/test_gen2sim_validity.py \
+  tests/test_train_gen2sim_validity.py \
+  tests/test_benchmark_gating.py \
+  tests/test_economic_wm_evidence_hygiene.py \
+  tests/test_perception_benchmark_evidence_emitter.py \
+  tests/test_provider_adapter_benchmark_evidence_emitter.py \
+  tests/test_vla_semantic_evidence.py \
+  tests/test_sampler_policy.py \
+  tests/test_train_sampler_policy.py \
+  tests/test_unified_quality_policy_backward_compat.py \
+  tests/test_shadow_replay_policy.py \
+  tests/test_vla_backend_policy.py \
+  tests/test_plan_policy.py \
+  tests/test_semantic_policy.py \
+  tests/test_pricing_sentinel.py \
+  tests/test_orchestrator_shell_policy.py \
+  tests/test_queue_dispatch_policy.py \
+  tests/test_fill_path_policy.py \
+  tests/test_pipeline_stage_policy.py \
+  tests/test_datapack_value_node_integration.py
+```
+
+Result: `193 passed`.
+
 The residual debt is now full-repo static hygiene outside that narrowed gate.
 It should still be burned down, because these modules are lower-WM producers,
 trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
@@ -352,7 +487,6 @@ Current residual broad ruff:
 | --- | ---: |
 | `scripts/` | 38 |
 | `src/utils/` | 10 |
-| `src/analytics/` | 9 |
 | `tests/` | 9 |
 | `src/orchestrator/` | 8 |
 | `src/learning/` | 7 |
@@ -363,27 +497,25 @@ Current residual broad ruff:
 | `src/config/` | 4 |
 | `src/contracts/` | 4 |
 | `src/tfd/` | 4 |
-| other checked-in support surfaces | 29 |
-| **Total** | **148** |
+| `policies/` | 3 |
+| `src/physics/` | 3 |
+| `src/shadow_runtime/` | 3 |
+| other checked-in support surfaces | 9 |
+| **Total** | **134** |
 
 Current residual broad ruff by code:
 
 | Code | Meaning | Count | Disposition |
 | --- | --- | ---: | --- |
-| `F401` | unused imports | 85 | mostly safe mechanical cleanup |
-| `F841` | unused locals | 43 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
+| `F401` | unused imports | 76 | mostly safe mechanical cleanup |
+| `F841` | unused locals | 40 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
 | `F821` | undefined names | 6 | treat as bugs before mechanical cleanup |
-| other `E`/`F` rules | style/ambiguous names/bare except | 14 | mechanical except where exceptions hide provider/runtime failures |
+| other `E`/`F` rules | style/ambiguous names/bare except | 12 | mechanical except where exceptions hide provider/runtime failures |
 
 Current residual full-repo mypy:
 
 | Area | Count |
 | --- | ---: |
-| `src/regal/` | 6 |
-| `src/analytics/` | 5 |
-| `src/encoders/` | 5 |
-| `src/evidence/` | 5 |
-| `src/policies/` | 5 |
 | `src/sima2/` | 4 |
 | `third_party/` | 4 |
 | `src/epiplexity/` | 4 |
@@ -395,25 +527,22 @@ Current residual full-repo mypy:
 | `src/datasets/` | 3 |
 | `src/phase_h/` | 2 |
 | other checked-in support surfaces | 10 |
-| **Total actual `error:` records** | **70** |
+| **Total actual `error:` records** | **44** |
 
 Current residual full-repo mypy by kind:
 
 | Kind | Count | Meaning |
 | --- | ---: | --- |
-| `arg-type` | 28 | interface drift and weak payload narrowing |
-| `assignment` | 16 | optional dependency/module typing, tensor/list reuse, schema mismatch |
-| `var-annotated` | 5 | untyped mutable containers |
+| `arg-type` | 18 | interface drift and weak payload narrowing |
+| `assignment` | 7 | optional dependency/module typing, tensor/list reuse, schema mismatch |
 | `attr-defined` | 5 | object payloads not narrowed before attribute access |
 | `dict-item` | 5 | dicts typed too narrowly for receipt/config payloads |
-| `call-arg` | 3 | stale call signatures and constructor drift |
+| `var-annotated` | 3 | untyped mutable containers |
 | `return-value` | 2 | declared receipt/runtime outputs too narrow |
-| `import-untyped` | 1 | installed dependencies without stubs |
-| `operator` | 1 | narrowed tensor/optional arithmetic gaps |
 | `name-defined` | 1 | missing or stale definitions |
 | `override` | 1 | interface override drift |
 | `import-not-found` | 1 | missing optional dependency |
-| `index` | 1 | weakly typed enum/list indices |
+| `call-arg` | 1 | stale call signatures and constructor drift |
 
 Legacy/support-surface disposition:
 
@@ -556,10 +685,9 @@ Not implemented as proof:
 
 1. **Full-repo mypy burn-down by support-surface family**
    - What: burn down the residual full-repo mypy debt in this order:
-     `src/regal/`, `src/analytics/`, `src/encoders/`, `src/evidence/`,
-     `src/policies/`, then `src/sima2/`, `third_party/`, `src/epiplexity/`,
-     `src/diffusion/`, `src/inference/`, and the remaining lower-count
-     support surfaces.
+     `src/sima2/`, `third_party/`, `src/epiplexity/`, `src/diffusion/`,
+     `src/inference/`, then `src/embodiment/`, `src/utils/`, `src/physics/`,
+     `src/datasets/`, and the remaining lower-count support surfaces.
    - Why now: these are the lower-WM producers, provider adapters,
      curriculum/replay surfaces, and trainer/runtime lanes that the WM stack
      consumes. Leaving them noisy makes future provider/GPU proof harder to
@@ -616,7 +744,7 @@ Not implemented as proof:
    - Verify: `./scripts/runpod/ensure_cli.sh`.
    - Do not: call manifest preparation or ledger generation a remote run.
 
-5. **External/provider/hardware proof lanes**
+7. **External/provider/hardware proof lanes**
    - What: after local static debt is quiet, run the provider bring-up,
      G1 loop, and training profiles only on configured RunPod/provider/hardware
      planes with manifests under `.agent/runs/<run_id>/manifest.json`.

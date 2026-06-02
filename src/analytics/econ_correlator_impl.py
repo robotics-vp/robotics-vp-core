@@ -12,7 +12,7 @@ import json
 import math
 import numpy as np
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, DefaultDict, Dict, List, Optional
 
 DEFAULT_TRUST_MATRIX_PATH = Path(__file__).resolve().parents[2] / "results" / "sima2" / "trust_matrix.json"
 TAG_TYPES = ("RiskTag", "OODTag", "RecoveryTag", "FragilityTag")
@@ -65,7 +65,9 @@ class EconCorrelator:
         Output:
         - TrustMatrix: Dict[tag_name, TrustEntry.to_dict()]
         """
-        accum = defaultdict(lambda: {"damage": [], "energy": [], "mpl": [], "error_rate": []})
+        accum: DefaultDict[str, Dict[str, List[float]]] = defaultdict(
+            lambda: {"damage": [], "energy": [], "mpl": [], "error_rate": []}
+        )
         indicators: Dict[str, List[int]] = {tag: [] for tag in TAG_TYPES}
         damages_all: List[float] = []
 
