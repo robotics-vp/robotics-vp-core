@@ -177,6 +177,170 @@ python3 -m pytest -q \
   tests/test_shadow_replay_policy.py
 ```
 
+The sixth local debt-burn pass cleared the full `src/scene` static surface.
+This was vector-scene support hygiene only: mixed tensor/id payload typing,
+NumPy scalar narrowing, tiled-scene list annotations, enum-index casts, and
+minor unused import/local cleanup. `src/scene` remains lower-WM scene substrate
+for Perception/Grounding, Sim/Synth, curriculum/regression, and future
+trainer/runtime lanes. It is not trained/provider-backed truth.
+
+The following scene checks now pass:
+
+```bash
+python3 -m ruff check src/scene
+python3 -m mypy --follow-imports=silent src/scene \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/scene -q
+python3 -m pytest -q \
+  tests/test_vector_scene_graph.py \
+  tests/test_lsd_vector_scene_env.py \
+  tests/test_lsd_integration.py \
+  tests/test_lsd3d_geometry.py
+```
+
+The seventh local debt-burn pass cleared the full `src/motor_backend` static
+surface. This was provider/hardware adapter hygiene only: optional Holosoma
+provider probes remain fail-closed, provider-bound config replacement is typed
+at the boundary, mixed metric/receipt metadata is represented honestly, and
+LSD vector-scene scene-tracker containers are annotated. It did not run
+Holosoma, ROS2, SDK2, Unitree, hardware, providers, GPU training, or policy
+promotion.
+
+The following motor-backend checks now pass:
+
+```bash
+python3 -m ruff check src/motor_backend
+python3 -m mypy --follow-imports=silent src/motor_backend \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/motor_backend -q
+python3 -m pytest -q \
+  tests/test_local_backend_factory_adapter.py \
+  tests/test_backend_health.py \
+  tests/test_holosoma_backend_interface.py \
+  tests/test_holosoma_adapter_execution.py \
+  tests/test_holosoma_runtime_binding.py \
+  tests/test_holosoma_runtime_pack.py \
+  tests/test_holosoma_adapter_realization.py \
+  tests/test_synthetic_backend.py
+```
+
+The eighth local debt-burn pass cleared the full `src/replay` static surface.
+This was replay/evidence substrate hygiene only: nested Economic WM window
+grouping, governed-video and semantic-degraded importer metadata typing,
+replay dataset precondition grouping, and receipt-label loop narrowing. It did
+not download LeRobot data, run providers, train, write weights, execute
+hardware, or promote replay rows.
+
+The following replay checks now pass:
+
+```bash
+python3 -m ruff check src/replay
+python3 -m mypy --follow-imports=silent src/replay \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/replay -q
+python3 -m pytest -q \
+  tests/test_replay_schema.py \
+  tests/test_replay_dataset.py \
+  tests/test_receipt_ingest.py \
+  tests/test_training_run_receipt_ingest.py \
+  tests/test_dataset_bridges.py \
+  tests/test_lerobot_perception_adapter.py
+```
+
+The ninth local debt-burn pass cleared the full `src/representation` static
+surface. This was trainer/runtime token-substrate hygiene only: optional YAML
+typing, contrastive-loss tensor narrowing, geometry-token guards,
+Gaussian-scene projection typing, vector-scene device conversion, and unused
+import cleanup. It did not train representation models, write weights, run
+providers, download datasets, or promote representation outputs.
+
+The following representation checks now pass:
+
+```bash
+python3 -m ruff check src/representation
+python3 -m mypy --follow-imports=silent src/representation \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/representation -q
+python3 -m pytest -q \
+  tests/representation \
+  tests/epiplexity/test_curated_slices_token_only.py
+```
+
+The tenth local debt-burn pass cleared the full `src/process_reward` static
+surface. This was reward-adjacent trainer/runtime hygiene only: mixed PBRS
+diagnostic payload typing, orchestrator adjustment payload typing, feature
+array narrowing, source-count annotations, and unused import/local cleanup. It
+did not change PBRS math, fusion behavior, reward equations, controller math,
+Phase B math, or promotion posture.
+
+The following process-reward checks now pass:
+
+```bash
+python3 -m ruff check src/process_reward
+python3 -m mypy --follow-imports=silent src/process_reward \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/process_reward -q
+python3 -m pytest -q tests/process_reward
+```
+
+The eleventh local debt-burn pass cleared the full `src/hrl` static surface
+and fixed the direct Phase C HRL/VLA smoke entrypoint. This was HRL trainer,
+controller, scripted-policy, and unified skill-graph hygiene only: optional
+torch fallback bases are explicit, workcell skill specs are narrowed before
+dict indexing, unused imports/locals were removed, and
+`scripts/smoke_test_phase_c_hrl_vla.py` now bootstraps the repo root for direct
+AGENTS.md-style invocation. It did not train HRL/VLA models, write datapack
+truth beyond the script's existing ignored local smoke output, change reward
+math, alter skill semantics, or promote any policy.
+
+The following HRL checks now pass:
+
+```bash
+python3 -m ruff check src/hrl scripts/smoke_test_phase_c_hrl_vla.py
+python3 -m mypy --follow-imports=silent src/hrl \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/hrl scripts/smoke_test_phase_c_hrl_vla.py -q
+python3 -m pytest -q \
+  tests/test_skill_graph.py \
+  tests/test_semantic_coverage_graph.py \
+  tests/test_semantic_gap_closure.py \
+  tests/test_coverage_evidence_harvester.py
+python3 scripts/smoke_test_phase_c_hrl_vla.py --episodes 3
+```
+
+The aggregate focused suite for all touched debt-burn families also passes:
+
+```bash
+python3 -m pytest -q \
+  tests/test_vector_scene_graph.py \
+  tests/test_lsd_vector_scene_env.py \
+  tests/test_lsd_integration.py \
+  tests/test_lsd3d_geometry.py \
+  tests/test_local_backend_factory_adapter.py \
+  tests/test_backend_health.py \
+  tests/test_holosoma_backend_interface.py \
+  tests/test_holosoma_adapter_execution.py \
+  tests/test_holosoma_runtime_binding.py \
+  tests/test_holosoma_runtime_pack.py \
+  tests/test_holosoma_adapter_realization.py \
+  tests/test_synthetic_backend.py \
+  tests/test_replay_schema.py \
+  tests/test_replay_dataset.py \
+  tests/test_receipt_ingest.py \
+  tests/test_training_run_receipt_ingest.py \
+  tests/test_dataset_bridges.py \
+  tests/test_lerobot_perception_adapter.py \
+  tests/representation \
+  tests/epiplexity/test_curated_slices_token_only.py \
+  tests/process_reward \
+  tests/test_skill_graph.py \
+  tests/test_semantic_coverage_graph.py \
+  tests/test_semantic_gap_closure.py \
+  tests/test_coverage_evidence_harvester.py
+```
+
+Result: `292 passed, 22 warnings`.
+
 The residual debt is now full-repo static hygiene outside that narrowed gate.
 It should still be burned down, because these modules are lower-WM producers,
 trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
@@ -187,57 +351,69 @@ Current residual broad ruff:
 | Area | Count |
 | --- | ---: |
 | `scripts/` | 38 |
-| `src/process_reward/` | 20 |
 | `src/utils/` | 10 |
 | `src/analytics/` | 9 |
-| `src/hrl/` | 9 |
 | `tests/` | 9 |
 | `src/orchestrator/` | 8 |
-| other checked-in support surfaces | 86 |
-| **Total** | **189** |
+| `src/learning/` | 7 |
+| `src/sima2/` | 7 |
+| `third_party/` | 7 |
+| `src/inference/` | 6 |
+| `src/sima/` | 6 |
+| `src/config/` | 4 |
+| `src/contracts/` | 4 |
+| `src/tfd/` | 4 |
+| other checked-in support surfaces | 29 |
+| **Total** | **148** |
 
 Current residual broad ruff by code:
 
 | Code | Meaning | Count | Disposition |
 | --- | --- | ---: | --- |
-| `F401` | unused imports | 120 | mostly safe mechanical cleanup |
-| `F841` | unused locals | 48 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
-| `F821` | undefined names | 7 | treat as bugs before mechanical cleanup |
+| `F401` | unused imports | 85 | mostly safe mechanical cleanup |
+| `F841` | unused locals | 43 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
+| `F821` | undefined names | 6 | treat as bugs before mechanical cleanup |
 | other `E`/`F` rules | style/ambiguous names/bare except | 14 | mechanical except where exceptions hide provider/runtime failures |
 
 Current residual full-repo mypy:
 
 | Area | Count |
 | --- | ---: |
-| `src/scene/` | 12 |
-| `src/motor_backend/` | 12 |
-| `src/replay/` | 8 |
-| `src/representation/` | 7 |
-| `src/process_reward/` | 6 |
-| `src/hrl/` | 6 |
 | `src/regal/` | 6 |
 | `src/analytics/` | 5 |
 | `src/encoders/` | 5 |
 | `src/evidence/` | 5 |
 | `src/policies/` | 5 |
-| other checked-in support surfaces | 40 |
-| **Total actual `error:` records** | **117** |
+| `src/sima2/` | 4 |
+| `third_party/` | 4 |
+| `src/epiplexity/` | 4 |
+| `src/diffusion/` | 4 |
+| `src/inference/` | 4 |
+| `src/embodiment/` | 3 |
+| `src/utils/` | 3 |
+| `src/physics/` | 3 |
+| `src/datasets/` | 3 |
+| `src/phase_h/` | 2 |
+| other checked-in support surfaces | 10 |
+| **Total actual `error:` records** | **70** |
 
 Current residual full-repo mypy by kind:
 
 | Kind | Count | Meaning |
 | --- | ---: | --- |
-| `arg-type` | 34 | interface drift and weak payload narrowing |
-| `assignment` | 31 | optional dependency/module typing, tensor/list reuse, schema mismatch |
-| `var-annotated` | 10 | untyped mutable containers |
-| `dict-item` | 9 | dicts typed too narrowly for receipt/config payloads |
-| `attr-defined` | 6 | object payloads not narrowed before attribute access |
-| `index` | 5 | weakly typed enum/list indices |
-| `return-value` | 4 | declared receipt/runtime outputs too narrow |
-| `import-untyped` | 3 | installed dependencies without stubs |
-| `operator` | 3 | narrowed tensor/optional arithmetic gaps |
+| `arg-type` | 28 | interface drift and weak payload narrowing |
+| `assignment` | 16 | optional dependency/module typing, tensor/list reuse, schema mismatch |
+| `var-annotated` | 5 | untyped mutable containers |
+| `attr-defined` | 5 | object payloads not narrowed before attribute access |
+| `dict-item` | 5 | dicts typed too narrowly for receipt/config payloads |
 | `call-arg` | 3 | stale call signatures and constructor drift |
-| other codes | 12 | smaller optional/import/operator/override issues |
+| `return-value` | 2 | declared receipt/runtime outputs too narrow |
+| `import-untyped` | 1 | installed dependencies without stubs |
+| `operator` | 1 | narrowed tensor/optional arithmetic gaps |
+| `name-defined` | 1 | missing or stale definitions |
+| `override` | 1 | interface override drift |
+| `import-not-found` | 1 | missing optional dependency |
+| `index` | 1 | weakly typed enum/list indices |
 
 Legacy/support-surface disposition:
 
@@ -249,6 +425,25 @@ Legacy/support-surface disposition:
 | `src/motor_backend/`, `src/embodiment/`, `src/ingestion/`, `src/runtime/` | hardware/provider/runtime adapter layer | keep as honest unavailable/proof-emitting adapters; do not collapse stubs into hardware truth |
 | `src/economics/`, `src/valuation/`, `src/ontology/`, `src/evidence/`, `src/contracts/` | cross-cutting economic, receipt, and evidence contracts | keep; avoid mutating frozen Phase B math or controller equations |
 | `scripts/`, `third_party/`, old demos/trainers | operational glue and historical smoke/prototype entrypoints | fix undefined names and safe lint; then either document as legacy/dev-only or migrate into receipt-emitting scripts |
+
+## Multi-WM Unwired Local Debt Fold-In
+
+The companion unwired audit still has local work that is not provider/GPU or
+hardware blocked. Those items are now part of this debt sweep instead of a
+separate next-action queue.
+
+| Local item | Source audit status | Why it is local | Next Action | Verify |
+| --- | --- | --- | --- | --- |
+| Static debt burn-down | ranked next local action | It is code/docs/test cleanup over checked-in support surfaces. | Continue mypy by family, then ruff by bug-first bucket. | `python3 -m mypy src/`; `python3 -m ruff check .` |
+| Provider bring-up readiness ledger | missing local ledger | It maps provider families to commands, receipts, unavailable posture, RunPod profile, and owner WM without downloading weights or running providers. | Add a typed ledger/checker for SAM/SAM3D, DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma. | ledger lint plus `python3 scripts/runpod/prepare_launch_manifest.py --profile provider_bringup --volume-id "$RUNPOD_VOLUME_ID"` when prerequisites exist |
+| Bio/neuro substrate receipt joins | substrate wired but isolated | Existing local receipts should become queryable lower-WM/Economic evidence rows without becoming promotion proof. | Add optional joins from `check_bio_neuro_substrate.py` output into lower-WM/economic consumption rows. | `python3 scripts/economic_world_model/check_bio_neuro_substrate.py --output-dir /tmp/bio_neuro` plus focused lower-WM consumption tests |
+| Phase 7 bounded consumption | shadow adapters exist | Existing Phase 7 signal adapters can consume better lower-WM receipts once joins exist. | Wire only through existing adapters; do not add abstract Phase 7 vocabulary unless lower-WM receipts force it. | `python3 -m pytest -q tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py` |
+| Script/smoke entrypoint hygiene | old operational glue | Direct script commands are local and should not require undocumented import paths. | Continue fixing direct-entry scripts where `ruff F821` or smoke runs show broken imports; classify unrecoverable old demos as dev-only. | relevant script smoke plus `python3 -m ruff check .` |
+
+Externally blocked items remain explicitly blocked, not local debt: real
+provider execution, Isaac/Unitree/Holosoma runtime proof, ROS2 publish, SDK2
+write, Unitree hardware, GPU training, promotion-grade benchmarks, and Phase 8
+weekly operations.
 
 ## G1 / Humanoid Neuralization Posture
 
@@ -271,7 +466,7 @@ The direct body/control neural scaffolds should be read as humanoid-first:
 
 | Rank | Debt | Type | Why It Matters | Next Action | Verify |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | Broad static hygiene is not clean | structural | Future GPU/provider sessions should not start with noisy lint/type failures unrelated to the run target. | Burn down ruff first by bucket, then mypy by WM. Keep commits small and avoid behavior changes unless a real bug is exposed. | `python3 -m ruff check .`; `python3 -m mypy src/` |
+| 1 | Broad static hygiene is not clean | structural | Future GPU/provider sessions should not start with noisy lint/type failures unrelated to the run target. | Continue mypy by support-surface family, then burn down ruff by bug-first bucket. Keep commits small and avoid behavior changes unless a real bug is exposed. | `python3 -m mypy src/`; `python3 -m ruff check .` |
 | 2 | RunPod is manifest-ready but locally launch-blocked | external/config | Provider bring-up, loop runs, and training cannot launch from this machine until CLI/auth/volume exist. | Install `runpodctl`, set `RUNPOD_API_KEY`, set `RUNPOD_VOLUME_ID` before first loop/train pod. | `./scripts/runpod/ensure_cli.sh` |
 | 3 | Broad full-suite proof was not rerun in this sweep | verification | Focused tests pass, nightly audit passes, but the full suite may expose unrelated failures. | Run full pytest once static smoke debt is lower or in CI/GPU-capable lane. | `python3 -m pytest tests/ -v` |
 | 4 | Some legacy naming remains in fixed-base curriculum modules | hygiene | G1 primary hygiene passes, but humans can still misread `workcell_isaaclab`-style names as target posture. | Add aliases/docs where module names cannot be safely renamed; prefer `curriculum_*` labels in new surfaces. | `python3 scripts/economic_world_model/check_g1_primary_env_hygiene.py --output-dir /tmp/g1_check` |
@@ -361,8 +556,10 @@ Not implemented as proof:
 
 1. **Full-repo mypy burn-down by support-surface family**
    - What: burn down the residual full-repo mypy debt in this order:
-     `src/vision/`, `src/vla/`, `src/envs/`, `src/rl/`, `src/scene/`,
-     `src/motor_backend/`, then replay/representation/process-reward/HRL.
+     `src/regal/`, `src/analytics/`, `src/encoders/`, `src/evidence/`,
+     `src/policies/`, then `src/sima2/`, `third_party/`, `src/epiplexity/`,
+     `src/diffusion/`, `src/inference/`, and the remaining lower-count
+     support surfaces.
    - Why now: these are the lower-WM producers, provider adapters,
      curriculum/replay surfaces, and trainer/runtime lanes that the WM stack
      consumes. Leaving them noisy makes future provider/GPU proof harder to
@@ -380,7 +577,27 @@ Not implemented as proof:
    - Do not: delete historical scripts blindly; either keep them working,
      mark them dev-only, or migrate them into receipt-emitting paths.
 
-3. **Legacy/support-surface disposition**
+3. **Provider bring-up readiness ledger**
+   - What: create a typed local provider ledger that maps SAM/SAM3D,
+     DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma to commands,
+     expected receipts, unavailable posture, RunPod profile, and owner WM.
+   - Why now: the provider backlog is spread across roadmap and JSON backlog
+     files; the next provider day should start from an executable ledger.
+   - Verify: ledger lint/checker plus provider manifest generation when
+     RunPod prerequisites exist.
+   - Do not: download weights, run providers, or claim provider execution
+     locally.
+
+4. **Bio/neuro receipt join wiring**
+   - What: join the already-wired local substrate receipts into normal
+     lower-WM/Economic consumption rows.
+   - Why now: the substrate should become queryable evidence without
+     pretending it is trained or promotion-grade.
+   - Verify: substrate checker plus focused lower-WM consumption tests.
+   - Do not: treat the joins as active sensing execution, interoceptive
+     hardware telemetry, trained anomaly critics, or Phase 7 authority.
+
+5. **Legacy/support-surface disposition**
    - What: for each now-typed support family, decide whether it is a
      lower-WM producer, trainer/runtime lane, curriculum/regression source,
      provider/hardware adapter, or legacy/dev-only tool.
@@ -391,7 +608,7 @@ Not implemented as proof:
    - Do not: move modules or rename public APIs unless the tests and docs prove
      the migration boundary.
 
-4. **RunPod prerequisite closeout**
+6. **RunPod prerequisite closeout**
    - What: install/auth `runpodctl`, set `RUNPOD_API_KEY`, and set
      `RUNPOD_VOLUME_ID`.
    - Why now: provider/loop/train profiles and the new provider readiness

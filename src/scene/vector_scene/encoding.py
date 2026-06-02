@@ -222,7 +222,7 @@ def ordered_scene_tensors(
     # Object mask (all valid for now)
     object_mask = torch.ones(n_objects, dtype=torch.float32)
 
-    result = {
+    result: Dict[str, Any] = {
         "node_features": node_tensor,
         "node_positions": node_positions,
         "object_features": object_tensor,

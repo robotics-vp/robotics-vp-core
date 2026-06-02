@@ -1,5 +1,183 @@
 # Economic World Model Implementation Notes
 
+## 2026-06-02 - Process reward package static cleanup
+
+### What changed
+
+- Cleared all `src/process_reward` mypy findings.
+  - PBRS telescoping diagnostics now allow mixed diagnostic payloads without changing the PBRS computation.
+  - Orchestrator fusion-adjustment payloads now allow trigger lists.
+  - Track-feature extraction now uses a separate NumPy array variable instead of reassigning a mutable feature list.
+  - Hop dataset statistics now annotate source-count maps.
+- Cleared package-level ruff for `src/process_reward` by removing unused imports and one unused local in heuristic fusion.
+
+### Surface role
+
+- `src/process_reward` is reward-adjacent trainer/runtime substrate for PBRS,
+  fusion diagnostics, hop labels, and future process-reward training rows.
+- It remains bounded support logic; this pass did not alter reward semantics or
+  promote reward-adjacent outputs.
+
+### Boundary
+
+- PBRS math, fusion behavior, reward equations, controller math, trust/`w_econ`
+  / lambda-controller math, Phase-B math, training, weights, provider/GPU/
+  hardware execution, promotion, and Phase 7 authority were unchanged.
+
+### Verification
+
+- `python3 -m ruff check src/process_reward` -> `All checks passed!`
+- `python3 -m mypy --follow-imports=silent src/process_reward --show-error-codes --no-error-summary` -> `0` process-reward-local errors
+- `python3 -m compileall src/process_reward -q`
+- `python3 -m pytest -q tests/process_reward` -> `55 passed, 20 warnings`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` -> `76` actual `error:` records in `46` files
+  - `python3 -m ruff check . --output-format=json` -> `157` issues
+
+## 2026-06-02 - Representation package static cleanup
+
+### What changed
+
+- Cleared all `src/representation` mypy findings.
+  - Optional YAML support in channel groups is explicitly typed as optional runtime dependency state.
+  - LOO contrastive loss now asserts numerator/denominator tensors after the existing positive-channel guard.
+  - Geometry SSL contrastive token mode now asserts token presence after the existing grid/token guard.
+  - Gaussian scene token projection is typed as an optional tensor and scene-graph tensor export passes string device names into the vector-scene helper.
+- Cleared package-level ruff for `src/representation`.
+
+### Surface role
+
+- `src/representation` is trainer/runtime lane substrate and lower-WM token
+  support for perception, scene geometry, representation alignment, and later
+  transport/economic training rows.
+- It is not promotion evidence and does not supersede provider-backed
+  perception or real lower-WM receipts.
+
+### Boundary
+
+- No model was trained, no weights were written, no provider/GPU/hardware path
+  ran, no dataset was downloaded, no reward/controller/Phase-B math changed,
+  and no authority or promotion was granted.
+
+### Verification
+
+- `python3 -m ruff check src/representation` -> `All checks passed!`
+- `python3 -m mypy --follow-imports=silent src/representation --show-error-codes --no-error-summary` -> `0` representation-local errors
+- `python3 -m compileall src/representation -q`
+- `python3 -m pytest -q tests/representation tests/epiplexity/test_curated_slices_token_only.py` -> `36 passed`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` -> `82` actual `error:` records in `50` files
+  - `python3 -m ruff check . --output-format=json` -> `177` issues
+
+## 2026-06-02 - Replay package static cleanup
+
+### What changed
+
+- Cleared all `src/replay` mypy findings.
+  - Shadow-run ingestion now annotates nested Economic WM windows by episode/window ID.
+  - Importer-side governed-video and semantic-degraded metadata now use distinct row/summary payload variables with mixed JSON typing.
+  - Replay dataset build grouping no longer reuses a step-record loop variable for window records.
+  - Receipt-label coverage summaries now use distinct loop variables for deployment, adaptation, datapack, and receipt rows.
+- `src/replay` was already ruff-clean and remains ruff-clean.
+
+### Surface role
+
+- `src/replay` is evidence/receipt substrate, lower-WM replay/export plumbing,
+  and trainer/runtime lane input preparation for governed-video, LeRobot/RLDS
+  bridges, receipt labels, shadow/offline learning, and Economic WM
+  consumption.
+- It is not obsolete legacy code and this pass did not create provider,
+  dataset, training, or promotion proof.
+
+### Boundary
+
+- No LeRobot download, provider run, GPU training, weight write, hardware
+  execution, reward/controller/Phase-B math change, or promotion occurred.
+- Replay rows remain structural and receipt-preserving; real provider/hardware
+  truth still requires real artifacts and external prerequisites.
+
+### Verification
+
+- `python3 -m ruff check src/replay` -> `All checks passed!`
+- `python3 -m mypy --follow-imports=silent src/replay --show-error-codes --no-error-summary` -> `0` replay-local errors
+- `python3 -m compileall src/replay -q`
+- `python3 -m pytest -q tests/test_replay_schema.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_run_receipt_ingest.py tests/test_dataset_bridges.py tests/test_lerobot_perception_adapter.py` -> `64 passed, 2 warnings`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` -> `89` actual `error:` records in `54` files
+  - `python3 -m ruff check . --output-format=json` -> `182` issues
+
+## 2026-06-02 - Motor backend static cleanup
+
+### What changed
+
+- Cleared all `src/motor_backend` mypy findings.
+  - Holosoma top-level provider probes now use `importlib.import_module`, preserving optional unavailable posture while avoiding untyped/redefinition import debt.
+  - Holosoma config replacement and dataclass override helpers now narrow through `Any` only at the provider boundary.
+  - Holosoma and LSD metric payloads are typed as mixed receipt/metadata dictionaries where they already carry nonnumeric blocker or scene metadata.
+  - LSD scene-tracker frame and instance-mask containers now have explicit annotations.
+- Cleared package-level ruff for `src/motor_backend`.
+
+### Surface role
+
+- `src/motor_backend` remains a provider/hardware adapter surface and runtime
+  support lane for Holosoma, LSD vector scenes, and backend factory paths.
+- This pass did not make optional providers available and did not convert
+  fixed-base/curriculum backend success into G1 or hardware proof.
+
+### Boundary
+
+- No Holosoma runtime, ROS2 publish, Unitree SDK2 write, G1Pilot invocation,
+  hardware run, GPU training, weight write, reward/controller/Phase-B math
+  change, or promotion occurred.
+- Provider imports still fail closed unless real packages and artifacts are
+  present.
+
+### Verification
+
+- `python3 -m ruff check src/motor_backend` -> `All checks passed!`
+- `python3 -m mypy --follow-imports=silent src/motor_backend --show-error-codes --no-error-summary` -> `0` motor-backend-local errors
+- `python3 -m compileall src/motor_backend -q`
+- `python3 -m pytest -q tests/test_local_backend_factory_adapter.py tests/test_backend_health.py tests/test_holosoma_backend_interface.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_runtime_binding.py tests/test_holosoma_runtime_pack.py tests/test_holosoma_adapter_realization.py tests/test_synthetic_backend.py` -> `22 passed`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` -> `97` actual `error:` records in `58` files
+  - `python3 -m ruff check . --output-format=json` -> `182` issues
+
+## 2026-06-02 - Scene package static cleanup
+
+### What changed
+
+- Cleared all `src/scene` mypy findings.
+  - Vector-scene tensor export helpers now explicitly type mixed tensor/id payload dictionaries before optional device moves.
+  - Tiled scene partitioning now casts NumPy scalar distances to Python floats and annotates scene-node/object/edge containers.
+  - Scene VAE decode helpers now cast categorical argmax results before enum indexing and keep the sample device in a separate typed value.
+- Cleared package-level ruff for `src/scene`.
+
+### Surface role
+
+- `src/scene` remains a Perception/Grounding and Sim/Synth support surface:
+  lower-WM producer substrate, curriculum/regression scene representation, and
+  future trainer/runtime lane scaffolding.
+- It is not obsolete legacy code, and this pass did not turn local scene VAE or
+  vector-scene helpers into trained/provider-backed truth.
+
+### Boundary
+
+- This is local scene/vector-scene static hygiene only.
+- No provider ran, no LeRobot data was downloaded, no GPU training ran, no
+  weights were written, no reward/controller/Phase-B math changed, no hardware
+  path ran, no promotion evidence was claimed, and Phase 7 authority remained
+  denied.
+
+### Verification
+
+- `python3 -m ruff check src/scene` -> `All checks passed!`
+- `python3 -m mypy --follow-imports=silent src/scene --show-error-codes --no-error-summary` -> `0` scene-local errors
+- `python3 -m compileall src/scene -q`
+- `python3 -m pytest -q tests/test_vector_scene_graph.py tests/test_lsd_vector_scene_env.py tests/test_lsd_integration.py tests/test_lsd3d_geometry.py` -> `87 passed`
+- Residual full-repo state after this tranche:
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` -> `109` actual `error:` records in `61` files
+  - `python3 -m ruff check . --output-format=json` -> `187` issues
+
 ## 2026-06-01 - RL package static cleanup
 
 ### What changed
@@ -6638,3 +6816,60 @@ This is local typed substrate and audit work only. It does not run providers,
 train models, execute active sensing on hardware, launch RunPod, operate
 Unitree sim/hardware, mutate reward math, grant Phase 7 authority, or produce
 promotion-grade evidence.
+
+## 2026-06-01 — Support-surface static debt burn-down through HRL
+
+### What changed
+
+- Cleared `src/scene` static debt by narrowing mixed tensor/id payloads, NumPy
+  scalar values, tiled-scene containers, enum indices, and VAE sampling device
+  handling.
+- Cleared `src/motor_backend` static debt by typing optional Holosoma provider
+  probes, provider-bound config replacement, mixed receipt metadata, and LSD
+  vector-scene tracker containers.
+- Cleared `src/replay` static debt by annotating nested Economic WM windows,
+  governed-video importer metadata, replay dataset grouping, and receipt-label
+  summary loops.
+- Cleared `src/representation` static debt by typing optional YAML handling,
+  token/contrastive tensor guards, Gaussian-scene projections, and vector-scene
+  device conversion.
+- Cleared `src/process_reward` static debt by widening diagnostic/adjustment
+  payloads, narrowing feature arrays, annotating source counts, and removing
+  dead imports/locals without changing PBRS or reward math.
+- Cleared `src/hrl` static debt by making optional torch fallback bases
+  explicit, narrowing workcell skill specs before graph indexing, and removing
+  dead imports/locals.
+- Updated `scripts/smoke_test_phase_c_hrl_vla.py` so the documented direct
+  smoke command works from the repo root without external `PYTHONPATH`.
+- Folded the local items from
+  `multi_wm_unwired_surface_audit_2026_06_01.md` into the subsystem debt sweep:
+  provider bring-up readiness ledger, bio/neuro receipt joins, bounded Phase 7
+  consumption, and script/smoke hygiene.
+
+### Current receipts
+
+Representative focused checks now passing:
+
+```bash
+python3 -m ruff check src/hrl scripts/smoke_test_phase_c_hrl_vla.py
+python3 -m mypy --follow-imports=silent src/hrl --show-error-codes --no-error-summary
+python3 -m compileall src/hrl scripts/smoke_test_phase_c_hrl_vla.py -q
+python3 -m pytest -q tests/test_skill_graph.py tests/test_semantic_coverage_graph.py tests/test_semantic_gap_closure.py tests/test_coverage_evidence_harvester.py
+python3 scripts/smoke_test_phase_c_hrl_vla.py --episodes 3
+```
+
+Aggregate focused test receipt for the touched families:
+
+- `292 passed, 22 warnings`
+
+Residual full-repo scans after the HRL pass:
+
+- broad mypy: 70 `error:` records across 43 files
+- broad ruff: 148 issues across 97 files
+
+### Boundary
+
+This tranche is local static and smoke hygiene only. It does not run providers,
+launch pods, train models, write weights, operate Unitree or other hardware,
+mutate frozen Phase B math, change reward/controller equations, grant Phase 7
+authority, or claim promotion-grade evidence.

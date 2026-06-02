@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """
 Lightweight smoke test for Phase C HRL/VLA stack plumbing.
 
@@ -17,7 +18,14 @@ For workcell (manufacturing cell) with FULL regality compliance, use:
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
+
 import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # Import sanity checks for Phase C modules
 from src.hrl import skills as _hrl_skills  # noqa: F401

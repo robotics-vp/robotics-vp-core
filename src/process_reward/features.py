@@ -6,8 +6,7 @@ Operates on latents and kinematics, NOT pixels.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -322,12 +321,12 @@ class FeatureExtractor:
                 features.extend([0.0] * 4)
 
         # Pad or truncate to feature_dim
-        features = np.array(features, dtype=np.float32)
-        if len(features) >= self.feature_dim:
-            return features[:self.feature_dim]
+        feature_array = np.array(features, dtype=np.float32)
+        if len(feature_array) >= self.feature_dim:
+            return feature_array[:self.feature_dim]
         else:
             padded = np.zeros(self.feature_dim, dtype=np.float32)
-            padded[:len(features)] = features
+            padded[:len(feature_array)] = feature_array
             return padded
 
     def _pool_features(

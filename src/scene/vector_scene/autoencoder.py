@@ -207,8 +207,6 @@ class SceneGraphDecoder(nn.Module):
                 object_latents = object_latents.unsqueeze(0)
 
         batch_size = scene_latent.size(0)
-        device = scene_latent.device
-
         # Condition queries with scene latent
         node_cond = self.scene_to_node_cond(scene_latent).unsqueeze(1)  # (B, 1, D)
         obj_cond = self.scene_to_obj_cond(scene_latent).unsqueeze(1)  # (B, 1, D)
@@ -411,7 +409,7 @@ class SceneGraphVAE(nn.Module):
         for i in range(node_exist.size(0)):
             if not node_exist[i]:
                 continue
-            node_type_idx = predictions["node_types"][i].argmax().item()
+            node_type_idx = int(predictions["node_types"][i].argmax().item())
             node_type = list(NodeType)[node_type_idx]
 
             # Extract basic polyline from features (placeholder)
@@ -437,7 +435,7 @@ class SceneGraphVAE(nn.Module):
         for i in range(obj_exist.size(0)):
             if not obj_exist[i]:
                 continue
-            class_idx = predictions["object_classes"][i].argmax().item()
+            class_idx = int(predictions["object_classes"][i].argmax().item())
             obj_class = list(ObjectClass)[class_idx]
 
             # Extract position from features (placeholder)
@@ -460,7 +458,7 @@ class SceneGraphVAE(nn.Module):
             for j in range(i + 1, len(nodes)):
                 if i < edge_logits.size(0) and j < edge_logits.size(1):
                     logits = edge_logits[i, j]
-                    pred_idx = logits.argmax().item()
+                    pred_idx = int(logits.argmax().item())
                     # Last index is "no edge"
                     if pred_idx < num_edge_types:
                         edge_type = list(EdgeType)[pred_idx]
@@ -591,11 +589,10 @@ class SceneGraphVAE(nn.Module):
         Returns:
             List of sampled SceneGraphs
         """
-        if device is None:
-            device = next(self.parameters()).device
+        sample_device: Any = device if device is not None else next(self.parameters()).device
 
         # Sample from prior
-        z = torch.randn(num_samples, self.latent_dim, device=device)
+        z = torch.randn(num_samples, self.latent_dim, device=sample_device)
 
         graphs = []
         for i in range(num_samples):

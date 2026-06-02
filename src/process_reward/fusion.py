@@ -11,8 +11,7 @@ Key requirements:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -410,8 +409,6 @@ class HeuristicFusion:
             (phi_star, confidence, diagnostics) tuple.
         """
         override = override or self.config.default_fusion_override
-        T = len(perspectives.phi_I)
-
         # Compute base weights from confidences
         conf_stack = np.stack([
             perspectives.conf_I,

@@ -7,15 +7,13 @@ Supports multiple label sources via LabelProvider abstraction.
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 
 try:
     import torch
     import torch.nn as nn
-    import torch.nn.functional as F
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -23,7 +21,6 @@ except ImportError:
 
 from src.process_reward.schemas import (
     ProcessRewardConfig,
-    FrameFeatures,
     EpisodeFeatures,
     HopLabel,
 )

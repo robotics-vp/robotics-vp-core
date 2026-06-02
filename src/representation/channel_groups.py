@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, Iterable, List
+from typing import Any, Dict, List, Optional
 import json
 import os
 
+yaml: Any
 try:
     import yaml  # type: ignore
 except Exception:  # pragma: no cover - optional dependency

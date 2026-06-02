@@ -7,17 +7,16 @@ controllable behaviour models.
 """
 from __future__ import annotations
 
-import hashlib
 import random
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
-from src.config.lsd_vector_scene_config import LSDVectorSceneConfig, load_lsd_vector_scene_config
+from src.config.lsd_vector_scene_config import LSDVectorSceneConfig
 from src.economics.econ_meter import EconomicMeter
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
 from src.motor_backend.datapacks import DatapackConfig
@@ -158,7 +157,7 @@ class LSDVectorSceneBackend:
 
         # Aggregate metrics
         raw_metrics = self._aggregate_episode_metrics(episode_results, phase="train")
-        econ_metrics = dict(self._econ_meter.summarize(raw_metrics))
+        econ_metrics: Dict[str, Any] = dict(self._econ_meter.summarize(raw_metrics))
 
         # Add difficulty features to raw metrics
         if episode_results:
@@ -215,7 +214,7 @@ class LSDVectorSceneBackend:
         # Aggregate metrics
         raw_metrics = self._aggregate_episode_metrics(episode_results, phase="eval")
         raw_metrics["num_episodes"] = float(num_episodes)
-        econ_metrics = dict(self._econ_meter.summarize(raw_metrics))
+        econ_metrics: Dict[str, Any] = dict(self._econ_meter.summarize(raw_metrics))
 
         # Add difficulty features
         if episode_results:
@@ -407,8 +406,8 @@ class LSDVectorSceneBackend:
 
                 # Generate synthetic frames and masks from trajectory
                 num_frames = min(step_count, 10)  # Limit for performance
-                frames = []
-                instance_masks = []
+                frames: List[np.ndarray] = []
+                instance_masks: List[Dict[Any, Any]] = []
                 for _ in range(num_frames):
                     frames.append(np.zeros((256, 256, 3), dtype=np.uint8))  # Stub frame
                     instance_masks.append({})  # Empty masks for stub
@@ -481,7 +480,7 @@ class LSDVectorSceneBackend:
         self,
         results: List[LSDVectorSceneEpisodeResult],
         phase: str,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """Aggregate metrics across episodes."""
         if not results:
             return {}

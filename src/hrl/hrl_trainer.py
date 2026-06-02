@@ -7,9 +7,7 @@ Provides training loops for:
 - End-to-end hierarchical training
 """
 
-import os
 import numpy as np
-from collections import defaultdict
 
 try:
     import torch
@@ -19,9 +17,8 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
-from .skills import SkillID, SkillParams, SkillTrajectory
+from .skills import SkillID, SkillParams
 from .low_level_policy import LowLevelSkillPolicy, ScriptedSkillPolicy
-from .high_level_controller import HighLevelController, ScriptedHighLevelController
 from .skill_termination import SkillTerminationDetector, SkillRewardShaper
 
 

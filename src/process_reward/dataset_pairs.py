@@ -366,7 +366,7 @@ class HopDataset:
         confs = np.array([e.label_confidence for e in self.examples])
         sources = [e.label_source for e in self.examples]
 
-        source_counts = {}
+        source_counts: Dict[str, int] = {}
         for s in sources:
             source_counts[s] = source_counts.get(s, 0) + 1
 

@@ -10,7 +10,7 @@ Implements Scenario Dreamer-style tiling with support for:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -168,7 +168,7 @@ def partition_along_route(
     for i in range(len(route_polyline) - 1):
         p0 = route_polyline[i]
         p1 = route_polyline[i + 1]
-        segment_length = np.linalg.norm(p1 - p0)
+        segment_length = float(np.linalg.norm(p1 - p0))
 
         if segment_length < 1e-6:
             continue
@@ -178,7 +178,7 @@ def partition_along_route(
         while accumulated_dist + segment_length >= current_tile_start + tile_size:
             # Create tile at this position
             progress = (current_tile_start + tile_size / 2 - accumulated_dist) / segment_length
-            progress = np.clip(progress, 0, 1)
+            progress = float(np.clip(progress, 0, 1))
             tile_center = p0 + progress * (p1 - p0)
 
             # Compute tile origin (shifted perpendicular and back)
@@ -248,7 +248,7 @@ def extract_tile_subgraph(
         max_y += boundary_margin
 
     # Filter nodes
-    included_nodes = []
+    included_nodes: List[SceneNode] = []
     node_id_map: Dict[int, int] = {}  # old_id -> new_id
 
     for node in graph.nodes:
@@ -270,7 +270,7 @@ def extract_tile_subgraph(
             ))
 
     # Filter edges (only include if both endpoints are in tile)
-    included_edges = []
+    included_edges: List[SceneEdge] = []
     for edge in graph.edges:
         if edge.src_id in node_id_map and edge.dst_id in node_id_map:
             included_edges.append(SceneEdge(
@@ -281,7 +281,7 @@ def extract_tile_subgraph(
             ))
 
     # Filter objects
-    included_objects = []
+    included_objects: List[SceneObject] = []
     for obj in graph.objects:
         if min_x <= obj.x <= max_x and min_y <= obj.y <= max_y:
             new_id = len(included_objects)

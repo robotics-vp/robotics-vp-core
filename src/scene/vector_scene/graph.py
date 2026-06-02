@@ -429,7 +429,7 @@ class SceneGraph:
             d_obj = len(ObjectClass) + 3 + 2 + 1 + 3
             object_tensor = torch.zeros((0, d_obj), dtype=torch.float32)
 
-        result = {
+        result: Dict[str, Any] = {
             "node_features": node_tensor,
             "edge_index": edge_index,
             "edge_features": edge_tensor,

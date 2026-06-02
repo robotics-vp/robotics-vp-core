@@ -8,14 +8,13 @@ Provides structured logging for:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Tuple
 import json
 
 import numpy as np
 
 from src.process_reward.schemas import (
-    ProcessRewardConfig,
     ProcessRewardEpisodeOutput,
     FusionOverride,
     MHNSummary,
@@ -322,7 +321,7 @@ class OrchestratorPolicy:
             ...     for trigger in adjustments["triggers"]:
             ...         log_data_quality_issue(trigger)
         """
-        adjustments = {}
+        adjustments: Dict[str, Any] = {}
         triggers = []
         new_temp = base_override.temperature
         new_risk = base_override.risk_tolerance

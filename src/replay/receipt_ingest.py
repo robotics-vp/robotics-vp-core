@@ -56,15 +56,15 @@ class ReceiptLabelBundle:
         for row in self.deployment_outcomes:
             if row.source_domain:
                 source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
-        for row in self.adaptation_outcomes:
-            if row.source_domain:
-                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
-        for row in self.datapack_contributions:
-            if row.source_domain:
-                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
-        for row in self.deployment_receipts:
-            if row.source_domain:
-                source_domain_counts[row.source_domain] = source_domain_counts.get(row.source_domain, 0) + 1
+        for adaptation_row in self.adaptation_outcomes:
+            if adaptation_row.source_domain:
+                source_domain_counts[adaptation_row.source_domain] = source_domain_counts.get(adaptation_row.source_domain, 0) + 1
+        for datapack_row in self.datapack_contributions:
+            if datapack_row.source_domain:
+                source_domain_counts[datapack_row.source_domain] = source_domain_counts.get(datapack_row.source_domain, 0) + 1
+        for receipt_row in self.deployment_receipts:
+            if receipt_row.source_domain:
+                source_domain_counts[receipt_row.source_domain] = source_domain_counts.get(receipt_row.source_domain, 0) + 1
         source_domains = sorted(source_domain_counts)
         episode_ids = sorted(
             {

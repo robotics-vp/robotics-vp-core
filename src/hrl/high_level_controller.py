@@ -5,23 +5,40 @@ Selects skills and parameters based on state/vision information.
 """
 
 import numpy as np
-
-try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.distributions import Categorical
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    class nn:
-        class Module:
-            pass
+from typing import Any
 
 from .skills import SkillID, SkillParams
 
+torch: Any
+nn: Any
+F: Any
+Categorical: Any
 
-class HighLevelController(nn.Module if TORCH_AVAILABLE else object):
+try:
+    import torch as _torch
+    import torch.nn as _torch_nn
+    import torch.nn.functional as _F
+    from torch.distributions import Categorical as _Categorical
+    torch = _torch
+    nn = _torch_nn
+    F = _F
+    Categorical = _Categorical
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    F = None
+    Categorical = None
+    TORCH_AVAILABLE = False
+    class _FallbackNN:
+        class Module:
+            pass
+    nn = _FallbackNN
+
+
+_HighLevelControllerBase: Any = nn.Module if TORCH_AVAILABLE else object
+
+
+class HighLevelController(_HighLevelControllerBase):
     """
     High-level controller that selects skills and parameters.
 

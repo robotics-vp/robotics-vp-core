@@ -337,7 +337,7 @@ class GaussianSceneTokenProvider(BaseTokenProvider):
         self.channel_name = channel_name
         self.token_dim = token_dim
         self.seed = seed
-        self._proj = None
+        self._proj: Optional[torch.Tensor] = None
 
     def provide(
         self,
@@ -1196,7 +1196,8 @@ def _scene_graph_to_tensors(graph: Any, pos_dim: int, device: Optional[torch.dev
             for key, val in graph.items()
         }
     else:
-        tensors = ordered_scene_tensors(graph, pos_dim=pos_dim, device=device)
+        device_name = str(device) if device is not None else None
+        tensors = ordered_scene_tensors(graph, pos_dim=pos_dim, device=device_name)
     if tensors["node_features"].dim() == 2:
         return tensors
     return {k: (v.squeeze(0) if isinstance(v, torch.Tensor) and v.dim() > 2 else v) for k, v in tensors.items()}

@@ -8,24 +8,37 @@ A conditioned policy that produces actions given:
 """
 
 import numpy as np
-
-try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.distributions import Normal
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    # Stub for non-torch environments
-    class nn:
-        class Module:
-            pass
+from typing import Any
 
 from .skills import SkillID, SkillParams
 
+torch: Any
+nn: Any
+Normal: Any
 
-class LowLevelSkillPolicy(nn.Module if TORCH_AVAILABLE else object):
+try:
+    import torch as _torch
+    import torch.nn as _torch_nn
+    from torch.distributions import Normal as _Normal
+    torch = _torch
+    nn = _torch_nn
+    Normal = _Normal
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    Normal = None
+    TORCH_AVAILABLE = False
+    # Stub for non-torch environments
+    class _FallbackNN:
+        class Module:
+            pass
+    nn = _FallbackNN
+
+
+_LowLevelPolicyBase: Any = nn.Module if TORCH_AVAILABLE else object
+
+
+class LowLevelSkillPolicy(_LowLevelPolicyBase):
     """
     Conditioned skill policy.
 
@@ -240,10 +253,7 @@ class ScriptedSkillPolicy:
             skill_params = SkillParams.default_for_skill(skill_id)
 
         ee_pos = obs[0:3]
-        ee_vel = obs[3:6]
-        drawer_frac = obs[6]
         vase_pos = obs[7:10]
-        min_clearance = obs[11]
 
         if skill_id == SkillID.LOCATE_DRAWER:
             # Move to see drawer (minimal movement, mostly observation)

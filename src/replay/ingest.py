@@ -96,7 +96,7 @@ def ingest_shadow_run(
         str(row.get("episode_id")): dict(row.get("econ_tensor", {}))
         for row in list(econ_payload.get("episodes", []) or [])
     }
-    econ_windows_by_episode = defaultdict(dict)
+    econ_windows_by_episode: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
     for row in list(econ_payload.get("windows", []) or []):
         episode_id = str(row.get("episode_id"))
         window = dict(row.get("window", {}) or {})

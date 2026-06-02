@@ -221,8 +221,8 @@ class ReplayDatasetBuilder:
         for row in steps:
             steps_by_episode.setdefault(row.episode_id, []).append(row)
         windows_by_episode: Dict[str, List[ReplayWindowRecord]] = {}
-        for row in windows:
-            windows_by_episode.setdefault(row.episode_id, []).append(row)
+        for window_row in windows:
+            windows_by_episode.setdefault(window_row.episode_id, []).append(window_row)
         execution_precondition_reports = [
             build_replay_execution_preconditions(
                 episode,

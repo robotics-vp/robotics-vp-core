@@ -49,6 +49,7 @@ class GeometrySSLContrastive(nn.Module):
             z1, z2 = self._encode_grid_views(bev_grid)
             grid_used = True
         else:
+            assert tokens is not None
             z1, z2 = self._encode_token_views(tokens)
             grid_used = False
 

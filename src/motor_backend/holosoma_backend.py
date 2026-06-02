@@ -6,7 +6,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence, cast
 
 from src.economics.econ_meter import EconomicMeter
 from src.motor_backend.base import MotorEvalResult, MotorTrainingResult
@@ -25,10 +25,14 @@ from src.objectives.economic_objective import (
     compile_economic_overlay,
 )
 
+holosoma: Any
+holosoma_inference: Any
+holosoma_retargeting: Any
+
 try:  # pragma: no cover
-    import holosoma  # type: ignore[import-not-found]
-    import holosoma_inference  # type: ignore[import-not-found]
-    import holosoma_retargeting  # type: ignore[import-not-found]
+    holosoma = importlib.import_module("holosoma")
+    holosoma_inference = importlib.import_module("holosoma_inference")
+    holosoma_retargeting = importlib.import_module("holosoma_retargeting")
 except ImportError:  # pragma: no cover
     holosoma = None
     holosoma_inference = None
@@ -218,9 +222,9 @@ class DefaultHolosomaRunner:
         if task_spec.simulator not in holo_simulator.DEFAULTS:
             raise ValueError(f"Unknown Holosoma simulator preset: {task_spec.simulator}")
 
-        base_cfg = holo_experiment.DEFAULTS[task_spec.exp_name]
-        sim_cfg = holo_simulator.DEFAULTS[task_spec.simulator]
-        logger_cfg = holo_logger.disabled
+        base_cfg: Any = holo_experiment.DEFAULTS[task_spec.exp_name]
+        sim_cfg: Any = holo_simulator.DEFAULTS[task_spec.simulator]
+        logger_cfg: Any = holo_logger.disabled
         if self._base_log_dir is not None:
             logger_cfg = dataclasses.replace(logger_cfg, base_dir=str(self._base_log_dir))
 
@@ -298,8 +302,8 @@ class DefaultHolosomaRunner:
         command_cfg = dataclasses.replace(command_cfg, setup_terms=setup_terms)
         return dataclasses.replace(config, command=command_cfg)
 
-    def _collect_log_metrics(self, run_dir: Path, config: Any) -> dict[str, float]:
-        metrics: dict[str, float] = {}
+    def _collect_log_metrics(self, run_dir: Path, config: Any) -> dict[str, Any]:
+        metrics: dict[str, Any] = {}
         log_file = self._find_latest_log(run_dir)
         if log_file is not None:
             metrics.update(_parse_log_metrics(log_file))
@@ -376,7 +380,7 @@ class HolosomaPolicyHandle:
         if holosoma_inference is None:
             return
         try:
-            import onnxruntime as ort  # type: ignore[import-not-found]
+            import onnxruntime as ort  # type: ignore[import-not-found,import-untyped]
         except Exception:
             return
         self._session = ort.InferenceSession(policy_id)
@@ -519,11 +523,11 @@ def _apply_dataclass_overrides(obj: Any, overrides: Mapping[str, Any]) -> Any:
             updates[key] = value
     if not updates:
         return obj
-    return dataclasses.replace(obj, **updates)
+    return dataclasses.replace(cast(Any, obj), **updates)
 
 
-def _parse_log_metrics(path: Path) -> dict[str, float]:
-    metrics: dict[str, float] = {}
+def _parse_log_metrics(path: Path) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
     key_val = re.compile(r"([A-Za-z0-9_./\- ]+):\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
     mean_reward_re = re.compile(r"Mean reward:\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
     mean_length_re = re.compile(r"Mean episode length:\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")

@@ -10,7 +10,6 @@ These are combined by FusionNet to produce the final Phi_star.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np

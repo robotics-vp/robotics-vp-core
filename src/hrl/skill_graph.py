@@ -249,15 +249,17 @@ class SkillGraph:
         # ── Workcell skills ─────────────────────────────────────────────
         if include_workcell_skills:
             for spec in _WORKCELL_SKILL_SPECS:
-                nodes[spec["skill_id"]] = SkillNode(
-                    skill_id=str(spec["skill_id"]),
+                skill_id = str(spec["skill_id"])
+                metadata = spec.get("metadata", {})
+                nodes[skill_id] = SkillNode(
+                    skill_id=skill_id,
                     skill_family="workcell",
                     label=str(spec["label"]),
                     description=str(spec.get("description", "")),
                     env_primitive_requirements=list(spec.get("env_primitive_requirements", [])),
                     object_family_requirements=list(spec.get("object_family_requirements", [])),
                     risk_families=list(spec.get("risk_families", [])),
-                    metadata=dict(spec.get("metadata", {})),
+                    metadata=dict(metadata) if isinstance(metadata, Mapping) else {},
                 )
             for task_id, ordered in _WORKCELL_TASK_SEQUENCES.items():
                 for a, b in zip(ordered, ordered[1:]):

@@ -13,7 +13,6 @@ Key properties:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -74,7 +73,7 @@ def verify_pbrs_telescoping(
     r_shape: np.ndarray,
     gamma: float,
     tolerance: float = 1e-5,
-) -> Tuple[bool, Dict[str, float]]:
+) -> Tuple[bool, Dict[str, Any]]:
     """Verify that PBRS satisfies the telescoping property.
 
     The key identity for PBRS is in the *discounted* return:
@@ -104,7 +103,7 @@ def verify_pbrs_telescoping(
         expected = float(phi_star[-1] - phi_star[0])
         error = abs(actual - expected)
         is_valid = error < tolerance
-        diagnostics = {
+        diagnostics: Dict[str, Any] = {
             "mode": "undiscounted",
             "plain_sum": actual,
             "expected_sum": expected,

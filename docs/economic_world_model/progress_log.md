@@ -1,5 +1,103 @@
 # Economic World Model Progress Log
 
+## 2026-06-02 - Process reward package static cleanup
+
+- **Changed**:
+  - cleared `src/process_reward` mypy findings in PBRS diagnostics typing, orchestrator adjustment payloads, feature-vector conversion, and dataset source-count annotations
+  - cleared all `src/process_reward` ruff findings by removing unused imports and one unused heuristic-fusion local
+  - kept process reward classified as reward-adjacent trainer/runtime substrate, not a reward-equation change
+- **Why this matters**:
+  - process-reward PBRS/fusion surfaces are now quieter inputs for future trainer rows and reward-adjacent audits before any GPU/provider work
+  - the full `src/` mypy residual dropped to `76` actual `error:` records in `46` files; full ruff residual dropped to `157` issues
+- **Boundary**:
+  - no PBRS formula, fusion behavior, reward equation, controller math, Phase B math, training, weights, provider/GPU/hardware execution, promotion, or Phase 7 authority changed
+- **Verification**:
+  - `python3 -m ruff check src/process_reward` (`All checks passed!`)
+  - `python3 -m mypy --follow-imports=silent src/process_reward --show-error-codes --no-error-summary` (`0` process-reward-local errors)
+  - `python3 -m compileall src/process_reward -q`
+  - `python3 -m pytest -q tests/process_reward` (`55 passed, 20 warnings`)
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` (`76` actual `error:` records in `46` files)
+  - `python3 -m ruff check . --output-format=json` (`157` issues)
+
+## 2026-06-02 - Representation package static cleanup
+
+- **Changed**:
+  - cleared `src/representation` mypy findings in channel-group optional YAML typing, LOO contrastive loss narrowing, geometry SSL token guards, Gaussian-scene projection typing, and scene-graph device conversion
+  - cleared all `src/representation` ruff findings, mostly unused imports in channel encoding and isomorphism adapters
+  - kept representation code classified as trainer/runtime token substrate and lower-WM representation support, not trained proof
+- **Why this matters**:
+  - token providers, channel-set encoders, and representation isomorphism adapters are cleaner inputs for future LeRobot/video replay, perception seams, and transport/economic training rows
+  - the full `src/` mypy residual dropped to `82` actual `error:` records in `50` files; full ruff residual dropped to `177` issues
+- **Boundary**:
+  - no training run, provider execution, GPU use, dataset download, weight write, promotion, reward/controller math mutation, hardware execution, or Phase 7 authority change occurred
+  - representation outputs remain local scaffold/support tensors until trained/provider-backed receipts and benchmarks exist
+- **Verification**:
+  - `python3 -m ruff check src/representation` (`All checks passed!`)
+  - `python3 -m mypy --follow-imports=silent src/representation --show-error-codes --no-error-summary` (`0` representation-local errors)
+  - `python3 -m compileall src/representation -q`
+  - `python3 -m pytest -q tests/representation tests/epiplexity/test_curated_slices_token_only.py` (`36 passed`)
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` (`82` actual `error:` records in `50` files)
+  - `python3 -m ruff check . --output-format=json` (`177` issues)
+
+## 2026-06-02 - Replay package static cleanup
+
+- **Changed**:
+  - cleared `src/replay` mypy findings in shadow-run ingestion, importer metadata payloads, replay dataset precondition grouping, and receipt-label coverage summaries
+  - kept replay as evidence/receipt substrate and lower-WM replay/export plumbing for governed-video, LeRobot/RLDS bridges, receipt labels, and shadow/offline learning
+- **Why this matters**:
+  - replay ingestion and bridge exports are no longer a type-noise source before LeRobot video-to-replay-to-perception and Economic WM consumption work
+  - the full `src/` mypy residual dropped to `89` actual `error:` records in `54` files; full ruff residual remains `182` issues
+- **Boundary**:
+  - no LeRobot download, provider execution, GPU training, weight write, promotion, hardware execution, reward/controller math mutation, or Phase 7 authority change occurred
+  - replay rows and receipt labels remain structural/evidence plumbing, not provider or hardware proof
+- **Verification**:
+  - `python3 -m ruff check src/replay` (`All checks passed!`)
+  - `python3 -m mypy --follow-imports=silent src/replay --show-error-codes --no-error-summary` (`0` replay-local errors)
+  - `python3 -m compileall src/replay -q`
+  - `python3 -m pytest -q tests/test_replay_schema.py tests/test_replay_dataset.py tests/test_receipt_ingest.py tests/test_training_run_receipt_ingest.py tests/test_dataset_bridges.py tests/test_lerobot_perception_adapter.py` (`64 passed, 2 warnings`)
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` (`89` actual `error:` records in `54` files)
+  - `python3 -m ruff check . --output-format=json` (`182` issues)
+
+## 2026-06-02 - Motor backend static cleanup
+
+- **Changed**:
+  - cleared `src/motor_backend` mypy findings across Holosoma optional provider imports, Holosoma config/metric payload typing, LSD vector-scene metric metadata, and scene-tracker mask annotations
+  - cleared all `src/motor_backend` ruff findings, including one undefined `torch` annotation in the economic overlay reward helper
+  - kept motor backends classified as provider/hardware adapters and curriculum/runtime support surfaces rather than hardware proof
+- **Why this matters**:
+  - Holosoma and LSD backend adapters no longer add static noise before RunPod/provider/hardware bring-up and replay/export work
+  - the full `src/` mypy residual dropped to `97` actual `error:` records in `58` files; full ruff residual dropped to `182` issues
+- **Boundary**:
+  - no Holosoma runtime, ROS2, SDK2, Unitree, hardware, provider, GPU, training, weight write, reward/controller math mutation, or promotion occurred
+  - optional provider imports remain fail-closed/unavailable unless the real packages and artifacts exist
+- **Verification**:
+  - `python3 -m ruff check src/motor_backend` (`All checks passed!`)
+  - `python3 -m mypy --follow-imports=silent src/motor_backend --show-error-codes --no-error-summary` (`0` motor-backend-local errors)
+  - `python3 -m compileall src/motor_backend -q`
+  - `python3 -m pytest -q tests/test_local_backend_factory_adapter.py tests/test_backend_health.py tests/test_holosoma_backend_interface.py tests/test_holosoma_adapter_execution.py tests/test_holosoma_runtime_binding.py tests/test_holosoma_runtime_pack.py tests/test_holosoma_adapter_realization.py tests/test_synthetic_backend.py` (`22 passed`)
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` (`97` actual `error:` records in `58` files)
+  - `python3 -m ruff check . --output-format=json` (`182` issues)
+
+## 2026-06-02 - Scene package static cleanup
+
+- **Changed**:
+  - cleared `src/scene` mypy findings in vector-scene graph tensor export, deterministic scene encoding, tiled scene partitioning, and VAE decode/sample helpers
+  - cleared the remaining `src/scene` ruff findings by removing an unused decoder local and an unused tiled-scene import
+  - kept vector-scene code classified as Perception/Grounding and Sim/Synth support substrate: provider-facing scene structure, curriculum/regression scene representation, and future trainer/runtime lane scaffolding
+- **Why this matters**:
+  - scene/vector-scene support no longer contributes full-repo static noise before later LeRobot/video-to-replay/perception and Sim/Synth replay work
+  - the full `src/` mypy residual dropped to `109` actual `error:` records in `61` files; full ruff residual dropped to `187` issues
+- **Boundary**:
+  - no provider execution, GPU training, dataset download, weight write, reward/controller math change, Phase B math mutation, promotion, hardware execution, or Phase 7 authority change occurred
+  - VAE and scene-graph code remains scaffold/support code until real training data, provider outputs, benchmarks, and receipts exist
+- **Verification**:
+  - `python3 -m ruff check src/scene` (`All checks passed!`)
+  - `python3 -m mypy --follow-imports=silent src/scene --show-error-codes --no-error-summary` (`0` scene-local errors)
+  - `python3 -m compileall src/scene -q`
+  - `python3 -m pytest -q tests/test_vector_scene_graph.py tests/test_lsd_vector_scene_env.py tests/test_lsd_integration.py tests/test_lsd3d_geometry.py` (`87 passed`)
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary` (`109` actual `error:` records in `61` files)
+  - `python3 -m ruff check . --output-format=json` (`187` issues)
+
 ## 2026-06-01 - RL package static cleanup
 
 - **Changed**:
@@ -4312,3 +4410,25 @@ Verification for the Phase-5.1 pass:
   They do not run providers, train models, execute active-sensing actions,
   launch pods, operate Unitree hardware, mutate reward math, grant Phase 7
   authority, or produce promotion-grade evidence.
+
+### 2026-06-01: WM support-surface static debt burn-down through HRL
+
+- Cleared focused ruff, mypy, compile, and tests for six support-surface
+  families that the WM stack consumes as lower-WM substrate, trainer/runtime
+  lanes, receipt rows, or curriculum/regression sources:
+  `src/scene`, `src/motor_backend`, `src/replay`, `src/representation`,
+  `src/process_reward`, and `src/hrl`.
+- Fixed direct invocation of `scripts/smoke_test_phase_c_hrl_vla.py` by
+  bootstrapping the repo root instead of requiring undocumented `PYTHONPATH`.
+- Updated `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`
+  with the completed tranches, current full-repo residuals, and the local
+  unwired-audit items: provider bring-up readiness ledger, bio/neuro receipt
+  joins, bounded Phase 7 consumption, and script/smoke hygiene.
+- Current residual static debt after the HRL pass:
+  - broad mypy: 70 `error:` records across 43 files
+  - broad ruff: 148 issues across 97 files
+- Aggregate focused test receipt for the touched families:
+  `292 passed, 22 warnings`.
+- Boundary preserved: this was typed/static/smoke hygiene only. It did not
+  mutate Phase B math, reward/controller equations, train models, write
+  weights, run providers/GPU/hardware, or claim promotion.

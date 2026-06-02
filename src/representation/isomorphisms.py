@@ -12,7 +12,6 @@ import numpy as np
 
 from src.representation.space import (
     RepresentationPayload,
-    InvariantReport,
     IsomorphismAdapter,
 )
 

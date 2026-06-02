@@ -310,7 +310,7 @@ def ingest_governed_video_admission_log(
                 "scene_tracks_non_stub", False
             ),
         }
-        metadata = {
+        row_metadata: Dict[str, Any] = {
             "source_adapter": "governed_video_admission_log_v1",
             "video_id": video_id,
             "proposal_id": proposal_id,
@@ -373,7 +373,7 @@ def ingest_governed_video_admission_log(
                 "value_target_pack_id": row.get("value_target_pack_id"),
             },
             ledger_event_ids=[],
-            metadata=metadata,
+            metadata=row_metadata,
             provenance=provenance,
         )
         step = ReplayStepRecord(
@@ -410,14 +410,14 @@ def ingest_governed_video_admission_log(
             source_domain=source_domain,
             seed=0,
             timestamp=timestamp,
-            metadata=metadata,
+            metadata=row_metadata,
             provenance=provenance,
         )
         episodes.append(episode)
         steps.append(step)
         windows.append(_single_window(episode, step))
 
-    metadata = {
+    summary_metadata: Dict[str, Any] = {
         "schema_version": REPLAY_SCHEMA_VERSION,
         "source_adapter": "governed_video_admission_log_v1",
         "source_path": str(path),
@@ -426,7 +426,7 @@ def ingest_governed_video_admission_log(
         "blocked_count": sum(1 for row in rows if row.get("blocked")),
         "admitted_count": sum(1 for row in rows if not row.get("blocked")),
     }
-    return episodes, steps, windows, metadata
+    return episodes, steps, windows, summary_metadata
 
 
 def ingest_semantic_degraded_artifacts(
@@ -478,7 +478,7 @@ def ingest_semantic_degraded_artifacts(
             1.0 if future_training_signals.get("teacher_runtime_live", False) else 0.0,
             1.0 if future_training_signals.get("scene_tracks_non_stub", False) else 0.0,
         ]
-        metadata = {
+        row_metadata: Dict[str, Any] = {
             "source_adapter": "semantic_degraded_import_v1",
             "failure_reason": failure_reason,
             "source_execution_preconditions": source_preconditions,
@@ -535,7 +535,7 @@ def ingest_semantic_degraded_artifacts(
                 "work_order_id": source_work_order.get("work_order_id"),
             },
             ledger_event_ids=[],
-            metadata=metadata,
+            metadata=row_metadata,
             provenance=provenance,
         )
         step = ReplayStepRecord(
@@ -568,14 +568,14 @@ def ingest_semantic_degraded_artifacts(
             source_domain=source_domain,
             seed=0,
             timestamp=timestamp,
-            metadata=metadata,
+            metadata=row_metadata,
             provenance=provenance,
         )
         episodes.append(episode)
         steps.append(step)
         windows.append(_single_window(episode, step))
 
-    metadata = {
+    summary_metadata: Dict[str, Any] = {
         "schema_version": REPLAY_SCHEMA_VERSION,
         "source_adapter": "semantic_degraded_import_v1",
         "source_root": str(path),
@@ -583,7 +583,7 @@ def ingest_semantic_degraded_artifacts(
         "episode_count": len(episodes),
         "failure_count": len(episodes),
     }
-    return episodes, steps, windows, metadata
+    return episodes, steps, windows, summary_metadata
 
 
 __all__ = [

@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-from typing import Dict, Optional, Tuple, Any, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 @dataclass

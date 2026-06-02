@@ -141,6 +141,7 @@ class LOOContrastive(nn.Module):
                 denom = denom_exp if denom is None else denom + denom_exp
                 cos_terms.append(float(pos_logit.mean().detach().cpu().item()))
 
+            assert numer is not None and denom is not None
             loss_vec = -torch.log((numer + 1e-6) / (denom + 1e-6))
             anchor_weight = weights.get(anchor_name, torch.ones_like(loss_vec, device=device))
             pos_weight = torch.stack([weights[name] for name in pos_names], dim=0).mean(dim=0)

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
 
 
 def economic_overlay_reward(env: Any, reward_scales: Mapping[str, float]) -> "torch.Tensor":
