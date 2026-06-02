@@ -6986,3 +6986,60 @@ providers, launch pods, train models, write weights, operate Unitree or other
 hardware, mutate frozen Phase B math, change reward/controller equations,
 change semantic task behavior, grant Phase 7 authority, or claim
 promotion-grade evidence.
+
+## 2026-06-02 — Support-surface static debt through physics
+
+### What changed
+
+- Cleared `third_party` static debt by typing optional SAM3D/LPIPS provider
+  wrappers through local model variables, keeping fallback instantiation
+  unchanged, and preserving explicit missing-provider smoke output.
+- Cleared `src/epiplexity` static debt by typing heterogeneous probe layers as
+  `nn.Module` and making canonical-token representation fail fast when the
+  pipeline does not return tokens.
+- Cleared `src/diffusion` static debt by widening mixed economic context
+  payloads and marking `diffusers` as an optional provider import.
+- Cleared `src/inference` static debt by removing dead imports, adding required
+  fallback `ConditionVector` fields, preserving depth metadata, and typing demo
+  policy metadata as JSON-ish.
+- Cleared `src/embodiment` static debt by narrowing optional energy values and
+  widening receipt metrics payloads.
+- Cleared `src/utils` static debt by typing optional torch module state,
+  dataclass JSON conversion, device-info payloads, and small lint issues.
+- Cleared `src/physics` static debt by preserving the Isaac stub reset contract,
+  narrowing PyBullet timestep values, casting the dishwashing fixed-base econ
+  params at the backend boundary, and removing unused mobility imports.
+
+### Current receipts
+
+```bash
+python3 -m ruff check third_party src/epiplexity src/diffusion src/inference src/embodiment src/utils src/physics
+python3 -m mypy --follow-imports=silent third_party src/epiplexity src/diffusion src/inference src/embodiment src/utils src/physics --show-error-codes --no-error-summary
+python3 -m compileall third_party src/epiplexity src/diffusion src/inference src/embodiment src/utils src/physics -q
+python3 -m third_party.smoke
+python3 -m pytest -q tests/epiplexity
+python3 -m pytest -q tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_diffusion_prompt_includes_constraints.py tests/test_governed_video_supervision.py tests/test_governed_video_world_model.py
+python3 -m pytest -q tests/embodiment tests/test_embodiment_actuation_world_model.py tests/test_embodiment_actuation_phase34.py tests/test_embodiment_shadow_consumer.py
+python3 -m pytest -q tests/test_backend_health.py tests/test_local_backend_factory_adapter.py tests/test_isaac_backend_shadow_contract.py tests/test_synthetic_backend.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py
+```
+
+Focused results:
+
+- epiplexity tests: `15 passed`
+- diffusion/governed-video tests: `8 passed`
+- inference demo smoke: pass
+- embodiment tests: `43 passed, 4 warnings`
+- physics/backend tests: `46 passed`
+
+Residual full-repo scans after this pass:
+
+- broad mypy: 15 `error:` records across 12 files
+- broad ruff: 101 issues
+
+### Boundary
+
+This tranche is local typed/static/smoke hygiene only. It does not run
+providers, download weights, launch pods, train models, write weights, operate
+Unitree or other hardware, publish ROS2, write SDK2 commands, mutate frozen
+Phase B math, change reward/controller equations, change physical constants,
+grant Phase 7 authority, or claim promotion-grade evidence.

@@ -6,9 +6,7 @@ Provides LPIPS loss with fallback gradient-based approximation.
 from __future__ import annotations
 
 import logging
-from typing import Optional
-
-import numpy as np
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ class LPIPSLoss:
         self.device = device if torch.cuda.is_available() else "cpu"
         self.use_fallback = use_fallback
         self.allow_fallback = allow_fallback
-        self._lpips_fn = None
+        self._lpips_fn: Optional[Any] = None
         
         if not use_fallback:
             self._try_load_lpips(net)
@@ -73,10 +71,11 @@ class LPIPSLoss:
             return
         
         try:
-            self._lpips_fn = lpips_lib.LPIPS(net=net).to(self.device)
-            self._lpips_fn.eval()
-            for param in self._lpips_fn.parameters():
+            lpips_fn: Any = lpips_lib.LPIPS(net=net).to(self.device)
+            lpips_fn.eval()
+            for param in lpips_fn.parameters():
                 param.requires_grad = False
+            self._lpips_fn = lpips_fn
             logger.info(f"LPIPS ({net}) loaded successfully")
         except Exception as e:
             msg = f"Failed to load LPIPS: {e}"

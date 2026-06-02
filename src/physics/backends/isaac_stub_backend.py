@@ -2,7 +2,7 @@
 Isaac stub backend to lock interface; real implementation to follow.
 """
 import logging
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from src.physics.backends.base import PhysicsBackend
 from src.physics.backends.mobility import MobilityContext
@@ -16,7 +16,8 @@ class IsaacStubBackend(PhysicsBackend):
         self.mobility_policy = mobility_policy
         self._backend_id = backend_id
 
-    def reset(self, seed: None = None) -> Dict[str, Any]:
+    def reset(self, seed: Optional[int] = None) -> Dict[str, Any]:
+        _ = seed
         self._logger.warning("Isaac stub reset called - not implemented.")
         raise NotImplementedError("Isaac backend not implemented; use pybullet backend for now.")
 

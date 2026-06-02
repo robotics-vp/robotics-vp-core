@@ -107,7 +107,7 @@ class SAM3DBodyInference:
         self.use_fallback = use_fallback
         self.allow_fallback = allow_fallback
         self.weights_path = weights_path or self.DEFAULT_WEIGHTS_PATH
-        self._model = None
+        self._model: Optional[Any] = None
         
         if not use_fallback:
             self._try_load_model()
@@ -138,10 +138,11 @@ class SAM3DBodyInference:
             return
         
         try:
-            self._model = SAM3D_Body.from_pretrained(self.weights_path)  # type: ignore
+            model: Any = SAM3D_Body.from_pretrained(self.weights_path)  # type: ignore
             if self.device == "cuda":
-                self._model = self._model.cuda()
-            self._model.eval()
+                model = model.cuda()
+            model.eval()
+            self._model = model
             logger.info("SAM3D-Body model loaded successfully")
         except Exception as e:
             msg = f"Failed to load SAM3D-Body: {e}"

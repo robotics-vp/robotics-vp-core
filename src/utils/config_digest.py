@@ -23,7 +23,7 @@ def compute_config_digest(config: Dict[str, Any]) -> str:
         config_str = json.dumps(config, sort_keys=True, default=str)
         digest = hashlib.sha256(config_str.encode("utf-8")).hexdigest()
         return digest[:16]
-    except Exception as e:
+    except Exception:
         return "digest_error"
 
 
@@ -55,4 +55,3 @@ def sha256_json(obj: Any) -> str:
     # Canonicalize with sorted keys
     json_str = json.dumps(obj, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
-

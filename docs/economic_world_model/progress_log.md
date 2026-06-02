@@ -4481,3 +4481,35 @@ Verification for the Phase-5.1 pass:
   run SIMA-2 providers, train models, write weights, launch pods, operate
   hardware, mutate reward/controller math, change semantic task behavior, grant
   Phase 7 authority, or claim promotion-grade evidence.
+
+### 2026-06-02: Support-surface static debt through physics
+
+- Cleared focused ruff, mypy, compile, and smoke/tests for the next seven
+  support-surface families: `third_party`, `src/epiplexity`, `src/diffusion`,
+  `src/inference`, `src/embodiment`, `src/utils`, and `src/physics`.
+- Roles preserved:
+  - `third_party`: optional SAM3D/LPIPS provider-adapter wrappers and smoke
+    probe; fallback-only locally
+  - `src/epiplexity`: trainer/eval lane for representation sampling
+  - `src/diffusion`: governed video diffusion provider/runtime planning lane
+  - `src/inference`: demo/runtime inference wrapper lane
+  - `src/embodiment`: embodiment receipt substrate
+  - `src/utils`: shared local utility substrate
+  - `src/physics`: fixed-base curriculum/backend substrate and Isaac stub
+    contract surface
+- Current residual static debt after this pass:
+  - broad mypy: 15 `error:` records across 12 files
+  - broad ruff: 101 issues
+- Focused receipts:
+  - third-party smoke: fallback wrappers instantiate; CUDA unavailable and
+    optional SAM3D repos/checkpoints remain unavailable locally
+  - epiplexity tests: `15 passed`
+  - diffusion/governed-video tests: `8 passed`
+  - inference demo smoke: pass
+  - embodiment tests: `43 passed, 4 warnings`
+  - physics/backend tests: `46 passed`
+- Boundary preserved: this was local typed/static/smoke hygiene only. It did
+  not run providers, download weights, train models, write weights, execute
+  GPU/hardware, publish ROS2, write SDK2 commands, mutate reward/controller
+  math, change physical constants, convert fixed-base curriculum into G1 proof,
+  or claim promotion-grade evidence.

@@ -2,7 +2,6 @@
 Heuristic mobility micro-policy.
 """
 from typing import Dict
-import math
 
 from src.physics.backends.mobility import MobilityPolicy, MobilityContext, MobilityAdjustment
 

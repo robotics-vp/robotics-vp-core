@@ -67,7 +67,7 @@ class EpiplexityEstimator(ABC):
 class _ProbeModel(nn.Module):
     def __init__(self, input_dim: int, config: ProbeModelConfig) -> None:
         super().__init__()
-        layers = []
+        layers: List[nn.Module] = []
         dim = input_dim
         for _ in range(max(1, config.num_layers)):
             layers.append(nn.Linear(dim, config.hidden_dim))

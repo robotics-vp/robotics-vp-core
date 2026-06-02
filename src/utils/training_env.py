@@ -5,7 +5,7 @@ based on the pipeline configuration.
 """
 import torch
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def device_info() -> Dict[str, Any]:
     Returns:
         Dictionary with device info
     """
-    info = {
+    info: Dict[str, Any] = {
         "cuda_available": torch.cuda.is_available(),
         "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
         "current_device": torch.cuda.current_device() if torch.cuda.is_available() else None,

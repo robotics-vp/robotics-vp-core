@@ -131,7 +131,7 @@ class VideoDiffusionRuntime:
             return None, "diffusers_unavailable"
         try:
             import torch
-            from diffusers import DiffusionPipeline
+            from diffusers import DiffusionPipeline  # type: ignore[import-not-found]
         except Exception as exc:  # pragma: no cover - import failure path
             return None, f"diffusion_runtime_import_error:{exc}"
 

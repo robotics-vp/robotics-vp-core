@@ -42,7 +42,7 @@ class DiffusionProposal:
     semantic_tags: List[str]  # Tags from VLA + SemanticOrchestrator
     objective_preset: str  # "throughput", "safety", "energy_saver", etc.
     energy_profile: str  # "BASE", "BOOST", "SAVER", "SAFE"
-    econ_context: Dict[str, float]  # Wage, energy price, customer segment
+    econ_context: Dict[str, Any]  # Wage, energy price, customer segment
     confidence: float  # Model's confidence in this proposal
     estimated_novelty: float  # Expected novelty score of generated clip
     rationale: str  # Why this clip was proposed
@@ -73,7 +73,7 @@ class SyntheticEpisodeProposal:
     objective_preset: str
     energy_profile: str
     semantic_tags: List[str]
-    econ_context: Dict[str, float]
+    econ_context: Dict[str, Any]
     expected_mpl_gain: float  # Expected learning gain from this episode
     estimated_tier: int  # 0=redundant, 1=context-novel, 2=frontier
 
@@ -259,7 +259,7 @@ class VideoDiffusionStub:
         objective_preset: str,
         hypotheses: List[Dict[str, Any]],
         energy_profile: str = "BASE",
-        econ_context: Optional[Dict[str, float]] = None,
+        econ_context: Optional[Dict[str, Any]] = None,
         constraint_set: Optional[Dict[str, Any]] = None,
         routing_context: Optional[Dict[str, Any]] = None,
         num_proposals: Optional[int] = None,
@@ -324,7 +324,7 @@ class VideoDiffusionStub:
         semantic_tags: List[str],
         objective_preset: str = "balanced",
         energy_profile: str = "BASE",
-        econ_context: Optional[Dict[str, float]] = None,
+        econ_context: Optional[Dict[str, Any]] = None,
         constraint_set: Optional[Dict[str, Any]] = None,
         hypotheses: Optional[List[Dict[str, Any]]] = None,
         routing_context: Optional[Dict[str, Any]] = None,
@@ -428,7 +428,7 @@ class VideoDiffusionStub:
         semantic_tags: List[str],
         objective_preset: str = "balanced",
         energy_profile: str = "BASE",
-        econ_context: Optional[Dict[str, float]] = None,
+        econ_context: Optional[Dict[str, Any]] = None,
         constraint_set: Optional[Dict[str, Any]] = None,
     ) -> SyntheticEpisodeProposal:
         """

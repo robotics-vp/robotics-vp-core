@@ -12,7 +12,6 @@ This class provides a clean inference interface that:
 For 2-week demo, not YC demo.
 """
 import hashlib
-import json
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,12 +19,7 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 
-from src.config.pipeline import (
-    get_canonical_task,
-    get_training_config,
-    is_neural_mode_enabled,
-    load_pipeline_config,
-)
+from src.config.pipeline import load_pipeline_config
 from src.observation.adapter import ObservationAdapter
 from src.observation.condition_vector_builder import ConditionVectorBuilder
 from src.utils.json_safe import to_json_safe
@@ -98,7 +92,7 @@ class DemoPolicy:
     Fully deterministic given seed, JSON-safe, flag-gated.
     """
 
-    def __init__(self, config: Optional[Union[DemoPolicyConfig, Dict]] = None):
+    def __init__(self, config: Optional[Union[DemoPolicyConfig, Dict[str, Any]]] = None):
         """
         Initialize DemoPolicy.
 
@@ -127,7 +121,7 @@ class DemoPolicy:
         self._load_components()
 
         # Metadata for debugging
-        self.metadata = {
+        self.metadata: Dict[str, Any] = {
             "backend_id": self.config.backend,
             "canonical_task_id": self.config.canonical_task_id,
             "neural_flags": {
@@ -187,7 +181,6 @@ class DemoPolicy:
         """Load trained vision backbone (RegNet + BiFPN)."""
         try:
             from src.vision.regnet_backbone import RegNetBackbone
-            from src.vision.bifpn_fusion import BiFPNFusion
 
             checkpoint_path = self.config.vision_checkpoint
             if checkpoint_path and Path(checkpoint_path).exists():
@@ -420,9 +413,6 @@ class DemoPolicy:
         if rgb is None:
             rgb = np.zeros((64, 64, 3), dtype=np.uint8)
 
-        # Extract depth (stub if missing)
-        depth = raw_obs.get("depth")
-
         # Compute state digest
         state_digest = compute_state_digest(raw_obs)
 
@@ -432,16 +422,23 @@ class DemoPolicy:
         else:
             height, width, channels = 64, 64, 3
 
+        depth = raw_obs.get("depth")
+        depth_shape = getattr(depth, "shape", None)
+        task_id = self.config.canonical_task_id or "drawer_open"
+
         return VisionFrame(
             backend=self.config.backend,
-            task_id=self.config.canonical_task_id,
+            task_id=task_id,
             episode_id=raw_obs.get("episode_id", "demo_episode"),
             timestep=self._step_count,
             width=width,
             height=height,
             channels=channels,
             state_digest=state_digest,
-            metadata={"rgb_shape": (height, width, channels) if rgb is not None else None},
+            metadata={
+                "rgb_shape": (height, width, channels) if rgb is not None else None,
+                "depth_shape": tuple(depth_shape) if depth_shape is not None else None,
+            },
         )
 
     def _build_condition_vector(self, raw_obs: Dict[str, Any], sima2_output: Dict[str, Any]):
@@ -451,8 +448,19 @@ class DemoPolicy:
         if not self.config.enable_condition_vector:
             # Return minimal condition vector
             return ConditionVector(
+                task_id=self.config.canonical_task_id or "drawer_open",
+                env_id=str(raw_obs.get("env_id", "demo_env")),
+                backend_id=self.config.backend,
+                target_mpl=0.0,
+                current_wage_parity=0.0,
+                energy_budget_wh=0.0,
                 curriculum_phase="demo",
                 skill_mode="default",
+                ood_risk_level=float(sima2_output.get("ood_risk_level", 0.0)),
+                recovery_priority=float(sima2_output.get("recovery_priority", 0.0)),
+                novelty_tier=0,
+                sima2_trust_score=float(sima2_output.get("sima2_trust_score", 0.0)),
+                recap_goodness_bucket=str(sima2_output.get("recap_goodness_bucket", "bronze")),
                 objective_preset="balanced",
             )
 

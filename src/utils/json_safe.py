@@ -5,7 +5,7 @@ Keeps downstream consumers (Claude, analytics scripts) aligned without changing
 core model behavior.
 """
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 import json
 
@@ -32,8 +32,8 @@ def to_json_safe(obj: Any, include_tensors: bool = False) -> Any:
     if obj is None:
         return None
 
-    if is_dataclass(obj):
-        return {k: to_json_safe(v, include_tensors) for k, v in asdict(obj).items()}
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return {k: to_json_safe(v, include_tensors) for k, v in asdict(obj).items()}  # type: ignore[arg-type]
 
     if isinstance(obj, dict):
         return {k: to_json_safe(v, include_tensors) for k, v in obj.items()}

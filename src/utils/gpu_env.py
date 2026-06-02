@@ -3,12 +3,14 @@ GPU environment detection and logging utilities.
 Simple helper to detect GPU availability and log environment details.
 """
 import os
-from typing import Optional
+from typing import Any, Optional
 
+torch: Any = None
 try:
-    import torch
+    import torch as _torch
+    torch = _torch
 except ImportError:
-    torch = None
+    pass
 
 
 def get_gpu_env_summary() -> dict:

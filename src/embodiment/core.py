@@ -614,7 +614,10 @@ def _estimate_energy_per_step(
         for entry in joint_state:
             if isinstance(entry, dict) and "energy_estimate_Wh" in entry:
                 try:
-                    energies.append(float(entry.get("energy_estimate_Wh")))
+                    energy_estimate = entry.get("energy_estimate_Wh")
+                    if energy_estimate is None:
+                        continue
+                    energies.append(float(energy_estimate))
                 except Exception:
                     continue
         if energies:
@@ -627,7 +630,8 @@ def _estimate_energy_per_step(
     total_energy = None
     if episode_metrics and "energy_Wh" in episode_metrics:
         try:
-            total_energy = float(episode_metrics.get("energy_Wh"))
+            energy_value = episode_metrics.get("energy_Wh")
+            total_energy = float(energy_value) if energy_value is not None else None
         except Exception:
             total_energy = None
     if total_energy is not None and num_frames > 0:

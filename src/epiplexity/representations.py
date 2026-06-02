@@ -52,7 +52,10 @@ def build_default_representation_fns(
         "geometry_scene_graph": lambda episodes: scene_provider.provide(episodes).tokens,
         "geometry_bev": lambda episodes: bev_provider.provide(episodes).tokens,
         "embodiment": lambda episodes: emb_provider.provide(episodes).tokens,
-        "canonical_tokens": lambda episodes: pipeline.encode(episodes).canonical_tokens,
+        "canonical_tokens": lambda episodes: _require_tokens(
+            pipeline.encode(episodes).canonical_tokens,
+            "canonical_tokens",
+        ),
         "homeomorphic": lambda episodes: _tokens_from_key(episodes, "homeomorphic_tokens"),
         "mhn_tokens": lambda episodes: _tokens_from_key(episodes, "mhn_tokens"),
         "geometry_gaussian_scene": lambda episodes: gaussian_provider.provide(episodes).tokens,
@@ -74,6 +77,12 @@ def _tokens_from_key(episodes: Sequence[Any] | Any, key: str) -> torch.Tensor:
         elif t.dim() == 3:
             stacked.append(t.squeeze(0))
     return torch.stack(stacked, dim=0)
+
+
+def _require_tokens(tokens: torch.Tensor | None, key: str) -> torch.Tensor:
+    if tokens is None:
+        raise ValueError(f"Representation '{key}' did not produce tokens")
+    return tokens
 
 
 __all__ = ["build_default_representation_fns", "RepresentationFn"]

@@ -1,4 +1,5 @@
-import csv, os
+import csv
+import os
 
 class CsvLogger:
     def __init__(self, path):
@@ -10,6 +11,7 @@ class CsvLogger:
         write_header = (not self.header_written) and (not os.path.exists(self.path))
         with open(self.path, "a", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(kwargs.keys()))
-            if write_header: w.writeheader()
+            if write_header:
+                w.writeheader()
             w.writerow(kwargs)
         self.header_written = True

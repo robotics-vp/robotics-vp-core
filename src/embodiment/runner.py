@@ -340,7 +340,7 @@ def run_embodiment_for_rollouts(
             }
         )
 
-        metrics = {
+        metrics: Dict[str, Any] = {
             "w_embodiment": result.w_embodiment,
             "embodiment_quality_score": result.summary.embodiment_quality_score,
             "embodiment_drift_score": result.summary.drift_score,

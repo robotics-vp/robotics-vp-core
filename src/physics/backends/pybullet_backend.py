@@ -1,7 +1,7 @@
 """
 PyBullet wrapper backend around DishwashingEnv (placeholder physics env).
 """
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Optional, Tuple, cast
 
 from src.physics.backends.base import PhysicsBackend
 from src.physics.backends.mobility import MobilityPolicy, MobilityContext
@@ -15,7 +15,7 @@ from src.vision.config import load_vision_config
 class PyBulletBackend(PhysicsBackend):
     def __init__(self, econ_preset: str = "toy", mobility_policy: Optional[MobilityPolicy] = None):
         profile = get_internal_experiment_profile("dishwashing")
-        params = load_econ_params(profile, preset=econ_preset)
+        params = cast(EconParams, load_econ_params(profile, preset=econ_preset))
         self.env = DishwashingEnv(params)
         self.mobility_policy = mobility_policy
 
@@ -36,7 +36,7 @@ class PyBulletBackend(PhysicsBackend):
                 task_id="unknown",
                 episode_id=info_dict.get("episode_id", ""),
                 env_name=self.backend_name,
-                timestep=int(info_dict.get("timestep", info_dict.get("step", 0))),
+                timestep=int(info_dict.get("timestep") or info_dict.get("step") or 0),
                 pose={"drift_mm": info_dict.get("drift_mm", 0.0)},
                 contacts={"slip_rate": info_dict.get("slip_rate", 0.0)},
                 target_precision_mm=float(info_dict.get("target_precision_mm", 5.0)),

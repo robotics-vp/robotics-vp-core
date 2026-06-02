@@ -2,7 +2,7 @@
 Mobility micro-policy interfaces (advisory-only).
 """
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, Protocol
 
 from src.utils.json_safe import to_json_safe
 

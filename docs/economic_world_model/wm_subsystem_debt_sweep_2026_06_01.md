@@ -493,6 +493,31 @@ python3 -m mypy --follow-imports=silent src/sima2 \
 python3 -m compileall src/sima2 -q
 ```
 
+The fourteenth local debt-burn pass cleared the next seven support-surface
+families: `third_party`, `src/epiplexity`, `src/diffusion`, `src/inference`,
+`src/embodiment`, `src/utils`, and `src/physics`. This was provider-adapter,
+trainer/eval-lane, governed diffusion/runtime, demo inference, embodiment
+receipt, local utility, and fixed-base curriculum/backend hygiene only. It kept
+optional SAM3D/LPIPS/diffusers paths fail-closed, preserved fallback smoke
+behavior, widened mixed JSON payloads where they already carry strings, and
+narrowed optional values before float/int conversion. It did not run providers,
+download weights, train models, execute GPU/hardware, publish ROS2, write SDK2
+commands, change physical constants, or promote fixed-base curriculum outputs.
+
+The following support-surface checks now pass:
+
+```bash
+python3 -m ruff check third_party src/epiplexity src/diffusion src/inference src/embodiment src/utils src/physics
+python3 -m mypy --follow-imports=silent third_party src/epiplexity src/diffusion src/inference src/embodiment src/utils src/physics \
+  --show-error-codes --no-error-summary
+python3 -m compileall third_party src/epiplexity src/diffusion src/inference src/embodiment src/utils src/physics -q
+python3 -m third_party.smoke
+python3 -m pytest -q tests/epiplexity
+python3 -m pytest -q tests/test_video_diffusion_runtime.py tests/test_video_diffusion_stub_routing.py tests/test_diffusion_prompt_includes_constraints.py tests/test_governed_video_supervision.py tests/test_governed_video_world_model.py
+python3 -m pytest -q tests/embodiment tests/test_embodiment_actuation_world_model.py tests/test_embodiment_actuation_phase34.py tests/test_embodiment_shadow_consumer.py
+python3 -m pytest -q tests/test_backend_health.py tests/test_local_backend_factory_adapter.py tests/test_isaac_backend_shadow_contract.py tests/test_synthetic_backend.py tests/test_sim_synth_physics_world_model.py tests/test_sim_synth_physics_scripts.py
+```
+
 The residual debt is now full-repo static hygiene outside that narrowed gate.
 It should still be burned down, because these modules are lower-WM producers,
 trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
@@ -503,61 +528,46 @@ Current residual broad ruff:
 | Area | Count |
 | --- | ---: |
 | `scripts/` | 38 |
-| `src/utils/` | 10 |
 | `tests/` | 9 |
 | `src/orchestrator/` | 8 |
 | `src/learning/` | 7 |
-| `third_party/` | 7 |
-| `src/inference/` | 6 |
 | `src/sima/` | 6 |
 | `src/config/` | 4 |
 | `src/contracts/` | 4 |
 | `src/tfd/` | 4 |
 | `policies/` | 3 |
-| `src/physics/` | 3 |
 | `src/shadow_runtime/` | 3 |
-| other checked-in support surfaces | 15 |
-| **Total** | **127** |
+| other checked-in support surfaces | 19 |
+| **Total** | **101** |
 
 Current residual broad ruff by code:
 
 | Code | Meaning | Count | Disposition |
 | --- | --- | ---: | --- |
-| `F401` | unused imports | 71 | mostly safe mechanical cleanup |
-| `F841` | unused locals | 38 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
+| `F401` | unused imports | 50 | mostly safe mechanical cleanup |
+| `F841` | unused locals | 35 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
 | `F821` | undefined names | 6 | treat as bugs before mechanical cleanup |
-| other `E`/`F` rules | style/ambiguous names/bare except | 12 | mechanical except where exceptions hide provider/runtime failures |
+| other `E`/`F` rules | style/ambiguous names/bare except | 10 | mechanical except where exceptions hide provider/runtime failures |
 
 Current residual full-repo mypy:
 
 | Area | Count |
 | --- | ---: |
-| `third_party/` | 4 |
-| `src/epiplexity/` | 4 |
-| `src/diffusion/` | 4 |
-| `src/inference/` | 4 |
-| `src/embodiment/` | 3 |
-| `src/utils/` | 3 |
-| `src/physics/` | 3 |
 | `src/datasets/` | 3 |
 | `src/phase_h/` | 2 |
 | other checked-in support surfaces | 10 |
-| **Total actual `error:` records** | **40** |
+| **Total actual `error:` records** | **15** |
 
 Current residual full-repo mypy by kind:
 
 | Kind | Count | Meaning |
 | --- | ---: | --- |
-| `arg-type` | 16 | interface drift and weak payload narrowing |
-| `assignment` | 7 | optional dependency/module typing, tensor/list reuse, schema mismatch |
-| `attr-defined` | 5 | object payloads not narrowed before attribute access |
-| `dict-item` | 5 | dicts typed too narrowly for receipt/config payloads |
-| `return-value` | 2 | declared receipt/runtime outputs too narrow |
+| `arg-type` | 8 | interface drift and weak payload narrowing |
+| `assignment` | 3 | optional dependency/module typing, tensor/list reuse, schema mismatch |
+| `return-value` | 1 | declared receipt/runtime outputs too narrow |
 | `name-defined` | 1 | missing or stale definitions |
-| `override` | 1 | interface override drift |
-| `import-not-found` | 1 | missing optional dependency |
 | `var-annotated` | 1 | untyped mutable containers |
-| `call-arg` | 1 | stale call signatures and constructor drift |
+| `attr-defined` | 1 | object payloads not narrowed before attribute access |
 
 Legacy/support-surface disposition:
 
@@ -720,9 +730,11 @@ Not implemented as proof:
 
 1. **Full-repo mypy burn-down by support-surface family**
    - What: burn down the residual full-repo mypy debt in this order:
-     `third_party/`, `src/epiplexity/`, `src/diffusion/`, `src/inference/`,
-     then `src/embodiment/`, `src/utils/`, `src/physics/`, `src/datasets/`,
-     and the remaining lower-count support surfaces.
+     `src/datasets/`, `src/phase_h/`, then the remaining one-error support
+     surfaces: `src/ontology`, `src/economics`, `src/geometry_graphs`,
+     `src/controllers`, `src/dataset_bridges`, `src/behaviour`,
+     `src/objectives`, `src/config`, `src/shadow_runtime`, and
+     `src/ingestion`.
    - Why now: these are the lower-WM producers, provider adapters,
      curriculum/replay surfaces, and trainer/runtime lanes that the WM stack
      consumes. Leaving them noisy makes future provider/GPU proof harder to
@@ -803,11 +815,12 @@ Read `AGENTS.md`,
 Burn down all remaining local subsystem debt in
 `wm_subsystem_debt_sweep_2026_06_01.md` continuously and robustly. Start with
 full-repo mypy by support-surface family:
-`third_party/`, `src/epiplexity/`, `src/diffusion/`, `src/inference/`, then
-`src/embodiment/`, `src/utils/`, `src/physics/`, `src/datasets/`,
-`src/phase_h/`, and the remaining lower-count support surfaces. Then burn down
-full-repo ruff bug-first: fix `F821` undefined names, then safe unused
-imports/locals, then the remaining style/exception issues.
+`src/datasets/`, `src/phase_h/`, then the remaining one-error support surfaces:
+`src/ontology`, `src/economics`, `src/geometry_graphs`, `src/controllers`,
+`src/dataset_bridges`, `src/behaviour`, `src/objectives`, `src/config`,
+`src/shadow_runtime`, and `src/ingestion`. Then burn down full-repo ruff
+bug-first: fix `F821` undefined names, then safe unused imports/locals, then
+the remaining style/exception issues.
 
 Further, burn down and wire all remaining local items from
 `multi_wm_unwired_surface_audit_2026_06_01.md`: provider bring-up readiness

@@ -6,7 +6,7 @@ Run with: python -m third_party.smoke
 from __future__ import annotations
 
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 
 def check_import(module_name: str) -> Tuple[bool, str]:
@@ -38,7 +38,7 @@ def check_wrapper(wrapper_name: str, class_name: str) -> Tuple[bool, str]:
         module = __import__(f"third_party.{wrapper_name}", fromlist=[class_name])
         cls = getattr(module, class_name)
         # Try to instantiate with fallback mode
-        instance = cls(use_fallback=True)
+        cls(use_fallback=True)
         return True, f"{class_name} instantiated"
     except ImportError as e:
         return False, f"Import error: {e}"
@@ -74,13 +74,12 @@ def run_smoke_tests() -> bool:
     for dep in deps:
         if dep == "cv2":
             try:
-                import cv2
+                import cv2  # type: ignore[import-not-found]
                 print(f"  ✓ {dep} (OpenCV {cv2.__version__})")
             except ImportError:
                 print(f"  ✗ {dep} not installed")
         elif dep == "PIL":
             try:
-                from PIL import Image
                 import PIL
                 print(f"  ✓ {dep} (Pillow {PIL.__version__})")
             except ImportError:

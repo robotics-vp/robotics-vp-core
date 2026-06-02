@@ -6,12 +6,11 @@ Writes failure reports to disk for post-mortem analysis.
 import contextlib
 import json
 import logging
-import os
 import time
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
