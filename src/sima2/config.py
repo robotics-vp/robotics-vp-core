@@ -108,7 +108,7 @@ def extract_provenance(record: Mapping[str, Any], fallback_config: Optional[Dict
     Pull provenance fields from a rollout/segment dict, defaulting to config values if missing.
     """
     cfg_prov = build_provenance({}, fallback_config) if fallback_config is not None else {}
-    meta = {}
+    meta: Dict[str, Any] = {}
     if isinstance(record, Mapping):
         meta = record.get("metadata", {}) or {}
     sima2_backend_id = (
@@ -122,7 +122,7 @@ def extract_provenance(record: Mapping[str, Any], fallback_config: Optional[Dict
     sima2_backend_mode = (
         record.get("sima2_backend_mode") if isinstance(record, Mapping) else None
     ) or meta.get("sima2_backend_mode") or cfg_prov.get("sima2_backend_mode", "stub")
-    task_spec = {}
+    task_spec: Dict[str, Any] = {}
     if isinstance(record, Mapping):
         task_spec = (
             record.get("sima2_task_spec")

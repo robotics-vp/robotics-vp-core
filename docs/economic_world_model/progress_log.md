@@ -4459,3 +4459,25 @@ Verification for the Phase-5.1 pass:
   not train models, write weights, run providers, launch pods, operate
   hardware, mutate reward/controller math, change promotion gates, or grant
   Phase 7 authority.
+
+### 2026-06-02: SIMA2 static debt and full-repo debt framing
+
+- Cleared the full `src/sima2` static surface with focused ruff, mypy, compile,
+  and semantic/VLA tests.
+- Folded the full-repo mypy/ruff question into
+  `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`: the
+  residual "legacy" surfaces are mostly WM substrate rather than superseded
+  code, including curriculum/replay producers, provider adapters,
+  trainer/runtime lanes, smoke scripts, and cross-cutting contracts.
+- Current residual static debt after the SIMA2 pass:
+  - broad mypy: 40 `error:` records across 26 files
+  - broad ruff: 127 issues across 83 files
+- Focused receipts:
+  - `python3 -m ruff check src/sima2`: pass
+  - `python3 -m mypy --follow-imports=silent src/sima2 --show-error-codes --no-error-summary`: pass
+  - `python3 -m compileall src/sima2 -q`: pass
+  - semantic/VLA focused pytest: `18 passed`
+- Boundary preserved: this was local typed/static/test hygiene only. It did not
+  run SIMA-2 providers, train models, write weights, launch pods, operate
+  hardware, mutate reward/controller math, change semantic task behavior, grant
+  Phase 7 authority, or claim promotion-grade evidence.

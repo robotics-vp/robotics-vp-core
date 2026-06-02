@@ -476,6 +476,23 @@ python3 -m pytest -q \
 
 Result: `193 passed`.
 
+The thirteenth local debt-burn pass cleared the full `src/sima2` static
+surface. This was semantic/perception support hygiene only: SIMA-2 config
+provenance payloads are typed, semantic primitive risk helpers accept set/list
+tag collections, and unused imports/locals were removed from advisory ontology,
+task-graph, segmenter, and tag propagation code. It did not run SIMA-2
+providers, train models, write weights, execute hardware, change task semantics,
+or promote semantic/VLA evidence.
+
+The following SIMA2 checks now pass:
+
+```bash
+python3 -m ruff check src/sima2
+python3 -m mypy --follow-imports=silent src/sima2 \
+  --show-error-codes --no-error-summary
+python3 -m compileall src/sima2 -q
+```
+
 The residual debt is now full-repo static hygiene outside that narrowed gate.
 It should still be burned down, because these modules are lower-WM producers,
 trainer/runtime lanes, curriculum sources, or receipt consumers. They are not
@@ -490,7 +507,6 @@ Current residual broad ruff:
 | `tests/` | 9 |
 | `src/orchestrator/` | 8 |
 | `src/learning/` | 7 |
-| `src/sima2/` | 7 |
 | `third_party/` | 7 |
 | `src/inference/` | 6 |
 | `src/sima/` | 6 |
@@ -500,15 +516,15 @@ Current residual broad ruff:
 | `policies/` | 3 |
 | `src/physics/` | 3 |
 | `src/shadow_runtime/` | 3 |
-| other checked-in support surfaces | 9 |
-| **Total** | **134** |
+| other checked-in support surfaces | 15 |
+| **Total** | **127** |
 
 Current residual broad ruff by code:
 
 | Code | Meaning | Count | Disposition |
 | --- | --- | ---: | --- |
-| `F401` | unused imports | 76 | mostly safe mechanical cleanup |
-| `F841` | unused locals | 40 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
+| `F401` | unused imports | 71 | mostly safe mechanical cleanup |
+| `F841` | unused locals | 38 | mostly safe, but inspect demos/trainers where variables imply missing receipts |
 | `F821` | undefined names | 6 | treat as bugs before mechanical cleanup |
 | other `E`/`F` rules | style/ambiguous names/bare except | 12 | mechanical except where exceptions hide provider/runtime failures |
 
@@ -516,7 +532,6 @@ Current residual full-repo mypy:
 
 | Area | Count |
 | --- | ---: |
-| `src/sima2/` | 4 |
 | `third_party/` | 4 |
 | `src/epiplexity/` | 4 |
 | `src/diffusion/` | 4 |
@@ -527,21 +542,21 @@ Current residual full-repo mypy:
 | `src/datasets/` | 3 |
 | `src/phase_h/` | 2 |
 | other checked-in support surfaces | 10 |
-| **Total actual `error:` records** | **44** |
+| **Total actual `error:` records** | **40** |
 
 Current residual full-repo mypy by kind:
 
 | Kind | Count | Meaning |
 | --- | ---: | --- |
-| `arg-type` | 18 | interface drift and weak payload narrowing |
+| `arg-type` | 16 | interface drift and weak payload narrowing |
 | `assignment` | 7 | optional dependency/module typing, tensor/list reuse, schema mismatch |
 | `attr-defined` | 5 | object payloads not narrowed before attribute access |
 | `dict-item` | 5 | dicts typed too narrowly for receipt/config payloads |
-| `var-annotated` | 3 | untyped mutable containers |
 | `return-value` | 2 | declared receipt/runtime outputs too narrow |
 | `name-defined` | 1 | missing or stale definitions |
 | `override` | 1 | interface override drift |
 | `import-not-found` | 1 | missing optional dependency |
+| `var-annotated` | 1 | untyped mutable containers |
 | `call-arg` | 1 | stale call signatures and constructor drift |
 
 Legacy/support-surface disposition:
@@ -554,6 +569,26 @@ Legacy/support-surface disposition:
 | `src/motor_backend/`, `src/embodiment/`, `src/ingestion/`, `src/runtime/` | hardware/provider/runtime adapter layer | keep as honest unavailable/proof-emitting adapters; do not collapse stubs into hardware truth |
 | `src/economics/`, `src/valuation/`, `src/ontology/`, `src/evidence/`, `src/contracts/` | cross-cutting economic, receipt, and evidence contracts | keep; avoid mutating frozen Phase B math or controller equations |
 | `scripts/`, `third_party/`, old demos/trainers | operational glue and historical smoke/prototype entrypoints | fix undefined names and safe lint; then either document as legacy/dev-only or migrate into receipt-emitting scripts |
+
+Full-repo mypy/ruff disposition:
+
+- Yes, it makes sense to clean up full-repo `mypy` and `ruff` now. The residual
+  files are not outside the WM architecture so much as support surfaces the WMs
+  consume: curriculum/replay producers, provider adapters, trainer/runtime
+  lanes, smoke scripts, legacy demos, and cross-cutting contracts.
+- The cleanup should stay additive and family-scoped. Type cleanup should
+  preserve behavior unless a real bug is exposed. Ruff cleanup should fix
+  `F821` undefined names first, then safe unused imports/locals, then the
+  remaining style/exception issues.
+- Legacy functionality should not be deleted just because it predates the
+  multi-WM structure. Keep it when it produces curriculum, tests adapters,
+  exercises provider pathways, or emits receipts. Reclassify it as dev-only or
+  migrate it into receipt-emitting scripts when it is still useful but not a WM
+  proof surface.
+- The only surfaces that should be considered candidates for retirement are
+  unreachable demos/scripts that neither pass smoke checks nor map to a WM
+  producer, adapter, trainer lane, receipt contract, or historical regression.
+  Retirement should be explicit and documented, not bundled into lint cleanup.
 
 ## Multi-WM Unwired Local Debt Fold-In
 
@@ -685,9 +720,9 @@ Not implemented as proof:
 
 1. **Full-repo mypy burn-down by support-surface family**
    - What: burn down the residual full-repo mypy debt in this order:
-     `src/sima2/`, `third_party/`, `src/epiplexity/`, `src/diffusion/`,
-     `src/inference/`, then `src/embodiment/`, `src/utils/`, `src/physics/`,
-     `src/datasets/`, and the remaining lower-count support surfaces.
+     `third_party/`, `src/epiplexity/`, `src/diffusion/`, `src/inference/`,
+     then `src/embodiment/`, `src/utils/`, `src/physics/`, `src/datasets/`,
+     and the remaining lower-count support surfaces.
    - Why now: these are the lower-WM producers, provider adapters,
      curriculum/replay surfaces, and trainer/runtime lanes that the WM stack
      consumes. Leaving them noisy makes future provider/GPU proof harder to
@@ -754,3 +789,40 @@ Not implemented as proof:
      nightly audit updates.
    - Do not: claim provider, GPU, Isaac/Unitree, Holosoma, or promotion proof
      without real execution artifacts.
+
+## Updated Goal Message For Next Session
+
+Boot in `/Users/amarmurray/robotics-vp-core` on `main`.
+
+Read `AGENTS.md`,
+`codex_skills/economic-world-model-roadmap/SKILL.md`,
+`codex_skills/roadmap-execution-companion/SKILL.md`,
+`docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`, and
+`docs/economic_world_model/multi_wm_unwired_surface_audit_2026_06_01.md`.
+
+Burn down all remaining local subsystem debt in
+`wm_subsystem_debt_sweep_2026_06_01.md` continuously and robustly. Start with
+full-repo mypy by support-surface family:
+`third_party/`, `src/epiplexity/`, `src/diffusion/`, `src/inference/`, then
+`src/embodiment/`, `src/utils/`, `src/physics/`, `src/datasets/`,
+`src/phase_h/`, and the remaining lower-count support surfaces. Then burn down
+full-repo ruff bug-first: fix `F821` undefined names, then safe unused
+imports/locals, then the remaining style/exception issues.
+
+Further, burn down and wire all remaining local items from
+`multi_wm_unwired_surface_audit_2026_06_01.md`: provider bring-up readiness
+ledger, bio/neuro receipt joins into lower-WM/Economic consumption rows,
+bounded Phase 7 receipt consumption through existing adapters only, and
+script/smoke entrypoint hygiene.
+
+Keep G1/bipedal whole-body primary. Treat stable-base mobile manipulation as
+fallback/degraded mode and fixed-base tabletop/workcell/dishwashing as
+curriculum/regression only. Keep all work additive, typed, receipt-emitting,
+and honest about unavailable GPU/provider/hardware proof. Do not mutate frozen
+Phase B math, stable checkpoints, reward/controller equations, trust/w_econ
+lambda math, or policy authority. Do not write weights, do not claim
+promotion, and do not expand Phase 7 abstractions unless lower-WM receipts
+force it. Run focused verification after each tranche, refresh broad
+`python3 -m mypy src/` and `python3 -m ruff check .` counts, and update
+`docs/economic_world_model/progress_log.md` plus
+`docs/economic_world_model/implementation_notes.md`.

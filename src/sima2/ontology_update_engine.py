@@ -6,7 +6,7 @@ mutating ontology or reward logic. All outputs are JSON-safe and respect
 economic/datapack/task-graph constraints.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from src.sima2.semantic_primitive_extractor import SemanticPrimitive
 from src.sima2.ontology_proposals import (
@@ -14,7 +14,7 @@ from src.sima2.ontology_proposals import (
     ProposalPriority,
     ProposalType,
 )
-from src.orchestrator.ontology import AffordanceType, EnvironmentOntology, ObjectCategory
+from src.orchestrator.ontology import AffordanceType, EnvironmentOntology
 from src.orchestrator.task_graph import TaskGraph
 from src.orchestrator.economic_controller import EconSignals
 from src.orchestrator.datapack_engine import DatapackSignals

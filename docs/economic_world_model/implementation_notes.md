@@ -6941,3 +6941,48 @@ providers, launch pods, train models, write weights, operate Unitree or other
 hardware, mutate frozen Phase B math, change reward/controller equations,
 change promotion gates, grant Phase 7 authority, or claim promotion-grade
 evidence.
+
+## 2026-06-02 — SIMA2 static debt and full-repo debt framing
+
+### What changed
+
+- Cleared `src/sima2` static debt by typing JSON-ish provenance containers,
+  accepting set/list tag collections in the risk helper, and removing unused
+  imports/locals from advisory ontology proposals, task-graph proposals,
+  segmenter NN scaffolding, ontology update generation, and semantic tag
+  propagation.
+- Updated the subsystem debt sweep so the residual full-repo mypy/ruff work is
+  explicitly in-scope: most of the old repo surface is lower-WM substrate,
+  trainer/runtime surface, curriculum/regression source, provider adapter,
+  receipt contract, or smoke/prototype glue, not superseded code.
+- Updated the multi-WM unwired audit queue to start the next mypy pass with
+  `third_party/`, `src/epiplexity/`, `src/diffusion/`, and `src/inference/`.
+
+### Current receipts
+
+```bash
+python3 -m ruff check src/sima2
+python3 -m mypy --follow-imports=silent src/sima2 --show-error-codes --no-error-summary
+python3 -m compileall src/sima2 -q
+python3 -m pytest -q \
+  tests/test_semantic_gap_closure.py \
+  tests/test_semantic_coverage_graph.py \
+  tests/test_semantic_policy.py \
+  tests/test_observation_semantic_truth.py \
+  tests/test_vla_semantic_evidence.py
+```
+
+Focused semantic/VLA test result: `18 passed`.
+
+Residual full-repo scans after the SIMA2 pass:
+
+- broad mypy: 40 `error:` records across 26 files
+- broad ruff: 127 issues across 83 files
+
+### Boundary
+
+This tranche is local typed/static/test hygiene only. It does not run SIMA-2
+providers, launch pods, train models, write weights, operate Unitree or other
+hardware, mutate frozen Phase B math, change reward/controller equations,
+change semantic task behavior, grant Phase 7 authority, or claim
+promotion-grade evidence.

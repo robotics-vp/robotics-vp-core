@@ -680,7 +680,6 @@ class SemanticTagPropagator:
         ontology_matcher = OntologyMatcher(ontology_proposals)
         task_graph_matcher = TaskGraphMatcher(task_graph_proposals)
         economics_matcher = EconomicsMatcher(economics_outputs)
-        segmentation_builder = self.segmentation_builder
 
         proposals: List[SemanticEnrichmentProposal] = []
         for datapack in sorted_datapacks:
@@ -1140,7 +1139,6 @@ class SemanticTagPropagator:
         slip_history = mobility_meta.get("slip_rates", [])
         precision_target = float(mobility_meta.get("target_precision_mm", 5.0))
         achieved_precision = float(mobility_meta.get("achieved_precision_mm", precision_target))
-        recovery_flags = mobility_meta.get("recovery_flags", [])
 
         stability_mean = float(sum(stability_history) / len(stability_history)) if stability_history else 1.0
         stability_min = float(min(stability_history)) if stability_history else 1.0

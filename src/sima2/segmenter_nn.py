@@ -23,8 +23,6 @@ Bootstrap training:
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
 # Try importing PyTorch
 try:
     import torch

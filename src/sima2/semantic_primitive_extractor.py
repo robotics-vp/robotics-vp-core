@@ -6,7 +6,7 @@ it does not mutate any global ontology state.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Sequence, Set, Tuple
+from typing import Any, Collection, Dict, List, Sequence, Set, Tuple
 
 from src.sima2.config import extract_provenance
 from src.sima2.heuristic_segmenter import HeuristicSegmenter
@@ -123,7 +123,7 @@ def _segments_from_heuristics(rollout: Dict[str, Any]) -> List[Dict[str, Any]]:
     return segments
 
 
-def _infer_risk_level(tags: Sequence[str], metrics: Dict[str, Any]) -> str:
+def _infer_risk_level(tags: Collection[str], metrics: Dict[str, Any]) -> str:
     """Derive a simple categorical risk level."""
     tag_set = {t.lower() for t in tags}
     if "fragile" in tag_set or metrics.get("fragile_interaction"):
