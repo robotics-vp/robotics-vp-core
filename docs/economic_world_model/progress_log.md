@@ -4565,3 +4565,40 @@ Verification for the Phase-5.1 pass:
   hardware execution, live policy control, training, weight write, reward
   mutation, provider execution, rosbag2/MCAP real stream import, or promotion
   was claimed.
+
+### 2026-06-02: Provider bring-up readiness ledger
+
+- Added a typed cross-WM provider bring-up readiness ledger covering
+  SAM/SAM3D, DINO/SigLIP, V-JEPA2 for Sim/Synth, V-JEPA2 for
+  Perception/Grounding, OpenVLA, Isaac/Unitree, and Holosoma.
+- Each provider row records owner WM, subsystem, run class, pod class, RunPod
+  profile, unavailable posture, source files, source backlog rows where
+  available, surface roles, command templates, local verification commands,
+  expected receipts, artifact paths, blockers, prerequisites, and a
+  manifest-shaped template stub.
+- Current local result:
+  - `entry_count=7`
+  - `covered_required_family_count=6`
+  - `launch_allowed_count=0`
+  - `provider_bringup_ready_count=0`
+  - `runpod_template_count=7`
+  - `all_entries_fail_closed=true`
+  - `provider_executed=false`
+  - `runpod_launched=false`
+  - `weights_downloaded=false`
+  - `training_executed=false`
+  - `hardware_executed=false`
+  - `promotion_eligible=false`
+- Current prerequisite probes are explicit blockers:
+  - `runpodctl_on_path=false`
+  - `RUNPOD_API_KEY_set=false`
+  - `RUNPOD_VOLUME_ID_set=false`
+  - `cuda_visible_devices_set=false`
+- Verification receipts:
+  - `python3 -m pytest -q tests/test_provider_bringup_readiness_ledger.py`: `2 passed`
+  - `python3 scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py`: pass
+  - focused mypy/ruff for the new ledger module/script/test: pass
+- Boundary preserved: this is template-only local readiness. It does not
+  download weights, launch RunPod, execute providers, run GPU jobs, operate
+  hardware, train, write weights, mutate reward/controller math, grant
+  authority, or claim promotion.

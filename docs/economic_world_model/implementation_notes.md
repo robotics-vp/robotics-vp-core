@@ -7147,3 +7147,77 @@ adapters only. It does not install `rosbag2_py` or `mcap`, parse real bags,
 observe live streams, publish ROS2/DDS, write SDK2 commands, invoke G1Pilot,
 operate hardware, train, write weights, mutate reward/controller math, or
 claim promotion.
+
+## 2026-06-02 — Provider bring-up readiness ledger
+
+### What changed
+
+- Added `src/world_model/economic_world_model/provider_bringup_ledger.py` with
+  typed ledger rows, a top-level report, save/load helpers, manifest-template
+  emission, and validation.
+- Added
+  `scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py`
+  to emit local JSON, JSONL, markdown, validation, and manifest-template
+  artifacts under
+  `artifacts/economic_world_model/provider_bringup_readiness_ledger/`.
+- Added `tests/test_provider_bringup_readiness_ledger.py`.
+- Exported the ledger API through `src/world_model/economic_world_model`.
+- Added tracked documentation at
+  `docs/economic_world_model/provider_bringup_readiness_ledger.md`.
+
+### Ledger rows
+
+The ledger currently covers seven template-only provider rows:
+
+- `sam_sam3d_scene_ir`
+- `dino_siglip_vision_backbone`
+- `vjepa2_sim_synth_predictive`
+- `vjepa2_perception_temporal`
+- `openvla_semantic_teacher`
+- `isaac_unitree_runtime`
+- `holosoma_runtime`
+
+Each row records surface roles, owner WM, run class, pod class, RunPod profile,
+unavailable posture, expected receipts, artifact paths, blocker codes,
+required prerequisites, local verification commands, and a manifest-shaped
+template stub.
+
+### Current receipts
+
+```bash
+python3 -m pytest -q tests/test_provider_bringup_readiness_ledger.py
+python3 scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py
+python3 -m ruff check src/world_model/economic_world_model/provider_bringup_ledger.py scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py tests/test_provider_bringup_readiness_ledger.py
+python3 -m mypy src/world_model/economic_world_model/provider_bringup_ledger.py scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py --show-error-codes --no-error-summary
+```
+
+Focused pytest result: `2 passed`.
+
+The compiler emitted:
+
+- `entry_count=7`
+- `covered_required_family_count=6`
+- `launch_allowed_count=0`
+- `provider_bringup_ready_count=0`
+- `runpod_template_count=7`
+- `all_entries_fail_closed=true`
+- `provider_executed=false`
+- `runpod_launched=false`
+- `weights_downloaded=false`
+- `training_executed=false`
+- `hardware_executed=false`
+- `promotion_eligible=false`
+
+Current prerequisite probes are unavailable:
+
+- `runpodctl_on_path=false`
+- `RUNPOD_API_KEY_set=false`
+- `RUNPOD_VOLUME_ID_set=false`
+- `cuda_visible_devices_set=false`
+
+### Boundary
+
+This is provider bring-up readiness only. It is safe for template storage and
+intentionally not safe for launch. It does not download weights, launch
+RunPod, execute providers, run GPU jobs, operate hardware, train, write
+weights, mutate reward/controller math, grant authority, or claim promotion.

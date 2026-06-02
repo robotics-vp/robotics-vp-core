@@ -48,13 +48,14 @@ After the full-repo static debt burn-down, the current
 local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
 sweep now owns the live ordering for remaining local work: keep full-repo
-`mypy src/` and `ruff check .` green, then implement the provider bring-up
-readiness ledger, LeRobot video-to-replay-to-perception receipt plumbing,
-Unitree event-spine refs into Phase 6.4 advisory runtime/eval receipts, neural
-trainability audit artifacts, bio/neuro receipt joins, and bounded Phase 7
-receipt consumption. Unitree rosbag2/MCAP unavailable receipts are now
-fail-closed locally and should stay green as a guardrail rather than being
-treated as real stream imports.
+`mypy src/` and `ruff check .` green, then implement LeRobot
+video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
+Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
+bio/neuro receipt joins, and bounded Phase 7 receipt consumption. The provider
+bring-up readiness ledger is now materialized locally as template-only,
+launch-blocked rows, and Unitree rosbag2/MCAP unavailable receipts are now
+fail-closed locally. Both should stay green as guardrails rather than being
+treated as provider/runtime/stream execution.
 Externally blocked provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and
 promotion-grade proof items remain blockers rather than local implementation
 claims.
@@ -238,20 +239,65 @@ Do not:
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 
-### 2. Add a provider bring-up readiness ledger
+### 2. Keep provider bring-up ledger green
 
-- **What**: create a local ledger that maps each provider family
-  (SAM/SAM3D, DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, Holosoma) to
-  command, expected receipts, unavailable mode, RunPod profile, and owner WM.
-- **Why now**: the provider backlog is spread across roadmap and JSON backlog
-  files.
+- **What**: keep the local provider ledger and manifest templates
+  launch-blocked, current, and validated after future provider-surface edits.
+- **Why now**: the provider backlog now has a typed ledger; regressions would
+  hide real provider/GPU/hardware blockers.
 - **Unblocks**: first GPU/provider day without rediscovering contracts.
-- **Verify**: provider ledger lint plus `provider_bringup` manifest generation.
+- **Verify**: `python3 scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py`; `python3 -m pytest -q tests/test_provider_bringup_readiness_ledger.py`
 - **Do NOT**: download weights or claim provider execution locally.
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 
-### 3. Wire bio/neuro substrate into normal receipt joins
+### 3. Wire LeRobot video to replay to perception receipts
+
+- **What**: normalize local video/camera receipts into replay rows and
+  perception samples while preserving ids, timestamps, camera keys, sidecars,
+  runtime refs, provenance, and unavailable posture.
+- **Why now**: static/provider blockers are now guardrails; this is the next
+  lower-WM evidence plumbing gap that can move locally without downloads or
+  GPU.
+- **Unblocks**: perception seam and replay rows that can be consumed by later
+  transport/economic audits.
+- **Verify**: video receipt -> replay row -> perception sample tests plus
+  `python3 -m mypy src/` and `python3 -m ruff check .`
+- **Do NOT**: treat CPU placeholder or flattened features as promotion-grade
+  provider truth.
+- **Confidence**: high
+- **Blocking**: blocks-downstream
+
+### 4. Wire Unitree event spines into Phase 6.4 eval
+
+- **What**: thread existing Unitree event-spine refs into Phase 6.4 advisory
+  runtime/eval receipts as lower-WM labels.
+- **Why now**: this connects existing transport eval to G1-target local lower-WM
+  receipts without inventing a parallel event model.
+- **Unblocks**: cleaner transport closure evidence before GPU/provider/hardware
+  sessions.
+- **Verify**: refs -> advisory receipts/evals tests with denied gates false.
+- **Do NOT**: bypass receivers, grant authority, or claim hardware/provider
+  proof.
+- **Confidence**: high
+- **Blocking**: blocks-downstream
+
+### 5. Emit neural trainability audit
+
+- **What**: emit additive JSON/JSONL/doc artifacts over neural, seam, encoder,
+  policy, head, bridge, receiver, and trainer surfaces with follow-up rows and
+  plane routing.
+- **Why now**: with static debt and provider ledger quiet, the repo can separate
+  code gaps from data, provider, GPU, hardware, and benchmark blockers.
+- **Unblocks**: executable August work partitioning across local, Codex,
+  RunPod, and hardware planes.
+- **Verify**: audit checker plus static checks.
+- **Do NOT**: train, write weights, or mark blocked components promotion
+  eligible.
+- **Confidence**: high
+- **Blocking**: blocks-downstream
+
+### 6. Wire bio/neuro substrate into normal receipt joins
 
 - **What**: after the static debt pass, add optional joins from
   `check_bio_neuro_substrate.py` outputs into lower-WM/economic consumption
@@ -265,7 +311,7 @@ Do not:
 - **Confidence**: medium
 - **Blocking**: nice-to-have
 
-### 4. Keep Phase 7 bounded
+### 7. Keep Phase 7 bounded
 
 - **What**: consume the new lower-WM receipts through existing Phase 7 signal
   adapters only when receipt joins exist.

@@ -575,6 +575,23 @@ LeRobot video-to-replay-to-perception receipts, Unitree event spines into Phase
 6.4 advisory eval receipts, bio/neuro receipt joins, and neural trainability
 audit artifacts.
 
+The seventeenth local debt-burn pass closed the provider bring-up readiness
+ledger locally. `provider_bringup_ledger.py` now emits seven launch-blocked
+provider rows covering all required families: SAM/SAM3D, DINO/SigLIP, V-JEPA2,
+OpenVLA, Isaac/Unitree, and Holosoma. Current receipts report
+`entry_count=7`, `covered_required_family_count=6`,
+`launch_allowed_count=0`, `provider_bringup_ready_count=0`,
+`runpod_template_count=7`, `all_entries_fail_closed=true`,
+`provider_executed=false`, `runpod_launched=false`, and
+`promotion_eligible=false`. Current local provider prerequisites remain
+unavailable: `runpodctl_on_path=false`, `RUNPOD_API_KEY_set=false`,
+`RUNPOD_VOLUME_ID_set=false`, and `cuda_visible_devices_set=false`.
+
+Remaining local debt after the provider-ledger pass: LeRobot
+video-to-replay-to-perception receipts, Unitree event spines into Phase 6.4
+advisory eval receipts, bio/neuro receipt joins, and neural trainability audit
+artifacts.
+
 Current residual broad ruff:
 
 | Area | Count |
@@ -767,18 +784,7 @@ Not implemented as proof:
    - Do not: broaden static cleanup into reward math, weight writes, or
      behavior-changing refactors.
 
-2. **Provider bring-up readiness ledger**
-   - What: create a typed local provider ledger that maps SAM/SAM3D,
-     DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma to commands,
-     expected receipts, unavailable posture, RunPod profile, and owner WM.
-   - Why now: the provider backlog is spread across roadmap and JSON backlog
-     files; the next provider day should start from an executable ledger.
-   - Verify: ledger lint/checker plus provider manifest generation when
-     RunPod prerequisites exist.
-   - Do not: download weights, run providers, or claim provider execution
-     locally.
-
-3. **LeRobot video to replay to perception receipts**
+2. **LeRobot video to replay to perception receipts**
    - What: normalize video/camera receipts into replay rows and perception
      samples while preserving ids, frame/step/timestamp/camera keys, sidecars,
      runtime refs, provenance, and unavailable posture.
@@ -788,7 +794,7 @@ Not implemented as proof:
    - Do not: treat placeholder/flattened CPU features as promotion-grade
      provider features.
 
-4. **Unitree event spines into Phase 6.4 advisory eval**
+3. **Unitree event spines into Phase 6.4 advisory eval**
    - What: use existing Unitree event-spine producers/refs and wire fresh
      `event_spine_ref` values into Phase 6.4 advisory runtime/eval receipts.
    - Why now: this gives transport eval better local lower-WM labels without
@@ -797,7 +803,7 @@ Not implemented as proof:
    - Do not: bypass receivers, grant authority, or claim hardware/provider
      proof.
 
-5. **Neural trainability audit**
+4. **Neural trainability audit**
    - What: emit additive JSON/JSONL/doc artifacts over neural/seam/encoder/
      policy/head/bridge/receiver/trainer surfaces with executable follow-up
      rows and plane routing.
@@ -807,7 +813,7 @@ Not implemented as proof:
    - Do not: train, write weights, or mark blocked components promotion
      eligible.
 
-6. **Bio/neuro receipt join wiring**
+5. **Bio/neuro receipt join wiring**
    - What: join the already-wired local substrate receipts into normal
      lower-WM/Economic consumption rows.
    - Why now: the substrate should become queryable evidence without
@@ -832,14 +838,14 @@ Burn down all remaining local subsystem debt in
 guardrails after every tranche.
 
 Further, burn down and wire all remaining local items from
-`multi_wm_unwired_surface_audit_2026_06_01.md`: provider bring-up readiness
-ledger, LeRobot video-to-replay-to-perception receipt plumbing, Unitree
-event-spine refs into Phase 6.4 advisory runtime/eval receipts, neural
-trainability audit artifacts, bio/neuro receipt joins into lower-WM/Economic
-consumption rows, and bounded Phase 7 receipt consumption through existing
-adapters only. Keep the now-hardened Unitree rosbag2/MCAP unavailable receipts
-green; do not claim real rosbag2/MCAP imports without real files, installed
-dependencies, and parser execution.
+`multi_wm_unwired_surface_audit_2026_06_01.md`: LeRobot
+video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
+Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
+bio/neuro receipt joins into lower-WM/Economic consumption rows, and bounded
+Phase 7 receipt consumption through existing adapters only. Keep the
+now-hardened provider bring-up ledger and Unitree rosbag2/MCAP unavailable
+receipts green; do not claim provider, GPU, RunPod, hardware, or real
+rosbag2/MCAP imports without real artifacts and execution.
 
 Keep G1/bipedal whole-body primary. Treat stable-base mobile manipulation as
 fallback/degraded mode and fixed-base tabletop/workcell/dishwashing as
