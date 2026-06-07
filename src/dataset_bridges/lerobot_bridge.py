@@ -73,6 +73,13 @@ def _split_sidecars(
     return metadata, provenance
 
 
+def _optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text or None
+
+
 def replay_episode_from_lerobot(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -100,6 +107,13 @@ def replay_episode_from_lerobot(
         row_metadata = dict(row.get("metadata", {}) or {})
         row_sidecars = dict(row_metadata.get("internal_sidecars", {}) or {})
         restored_metadata, restored_provenance = _split_sidecars(row_sidecars)
+        for key, value in row_metadata.items():
+            if key not in {
+                "internal_sidecars",
+                "benchmark_gate",
+                "future_training_signals",
+            }:
+                restored_metadata[str(key)] = value
         if isinstance(row_metadata.get("benchmark_gate"), Mapping):
             restored_metadata["benchmark_gate"] = dict(row_metadata["benchmark_gate"])
         if isinstance(row_metadata.get("future_training_signals"), Mapping):
@@ -132,9 +146,15 @@ def replay_episode_from_lerobot(
                 condition_vector_values=[],
                 skill_mode=str(row_metadata.get("skill_mode", "rehydrated")),
                 objective_tensor_summary={},
-                objective_tensor_ref=None,
+                objective_tensor_ref=_optional_str(
+                    restored_provenance.get("objective_tensor_ref")
+                    or restored_metadata.get("objective_tensor_ref")
+                ),
                 econ_tensor_summary={},
-                econ_tensor_ref=None,
+                econ_tensor_ref=_optional_str(
+                    restored_provenance.get("econ_tensor_ref")
+                    or restored_metadata.get("econ_tensor_ref")
+                ),
                 constraint_flags=[],
                 pricing_tick_ref=restored_metadata.get("pricing_tick_ref"),
                 ledger_event_ref=restored_metadata.get("ledger_event_ref"),
@@ -170,9 +190,15 @@ def replay_episode_from_lerobot(
         condition_vector={},
         condition_vector_values=[],
         objective_tensor_summary={},
-        objective_tensor_ref=episode_metadata.get("objective_tensor_ref"),
+        objective_tensor_ref=_optional_str(
+            episode_provenance.get("objective_tensor_ref")
+            or episode_metadata.get("objective_tensor_ref")
+        ),
         econ_tensor_summary={},
-        econ_tensor_ref=episode_metadata.get("econ_tensor_ref"),
+        econ_tensor_ref=_optional_str(
+            episode_provenance.get("econ_tensor_ref")
+            or episode_metadata.get("econ_tensor_ref")
+        ),
         pricing_summary={},
         pricing_tick_refs=[],
         constraint_flags=[],

@@ -4602,3 +4602,44 @@ Verification for the Phase-5.1 pass:
   download weights, launch RunPod, execute providers, run GPU jobs, operate
   hardware, train, write weights, mutate reward/controller math, grant
   authority, or claim promotion.
+
+### 2026-06-07: LeRobot video receipt replay/perception bridge
+
+- Added a typed local LeRobot video/camera receipt bridge:
+  - `src/dataset_bridges/lerobot_video_receipt_adapter.py`
+  - `scripts/economic_world_model/compile_lerobot_video_replay_perception_receipts.py`
+  - `tests/test_lerobot_video_receipt_adapter.py`
+- The bridge normalizes video/camera receipts into LeRobot-like rows,
+  rehydrates canonical replay episodes/steps, and builds CPU-safe
+  EvidenceFusion, V-JEPA temporal, and vision-backbone projection samples
+  while preserving receipt ids, frame indices, timestamps, camera keys,
+  task/env ids, reward proxies, sidecars, runtime/event/decision/objective/econ
+  refs, provenance, and unavailable posture.
+- Hardened the existing LeRobot replay bridge so objective/econ refs and
+  non-sidecar receipt metadata survive rehydration. The perception adapter now
+  marks local placeholder/flattened camera features as advisory evidence rather
+  than provider-backed truth, and it preserves bridge posture in sample
+  metadata.
+- Current local compiler result:
+  - `video_receipt_count=1`
+  - `replay_episode_count=1`
+  - `replay_step_count=3`
+  - `camera_key_count=2`
+  - `evidence_fusion_sample_count=3`
+  - `vjepa_temporal_sample_count=2`
+  - `vision_backbone_projection_sample_count=3`
+  - `provider_executed=false`
+  - `gpu_training_executed=false`
+  - `video_decoding_executed=false`
+  - `weights_downloaded=false`
+  - `unitree_hardware_truth=false`
+  - `promotion_eligible=false`
+  - `phase7_authority_granted=false`
+- Verification receipts:
+  - `python3 -m pytest -q tests/test_lerobot_video_receipt_adapter.py tests/test_lerobot_perception_adapter.py`: `50 passed`
+  - `python3 scripts/economic_world_model/compile_lerobot_video_replay_perception_receipts.py`: pass
+  - focused ruff/mypy for the touched LeRobot bridge surfaces: pass
+- Boundary preserved: this is local receipt/replay/perception schema wiring
+  only. It does not download data, decode video, execute providers, run GPU,
+  train, write weights, operate Unitree hardware, mutate reward/controller
+  math, grant Phase 7 authority, or claim promotion.

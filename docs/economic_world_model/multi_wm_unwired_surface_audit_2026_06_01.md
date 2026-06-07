@@ -48,14 +48,15 @@ After the full-repo static debt burn-down, the current
 local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
 sweep now owns the live ordering for remaining local work: keep full-repo
-`mypy src/` and `ruff check .` green, then implement LeRobot
-video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
-Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
-bio/neuro receipt joins, and bounded Phase 7 receipt consumption. The provider
-bring-up readiness ledger is now materialized locally as template-only,
-launch-blocked rows, and Unitree rosbag2/MCAP unavailable receipts are now
-fail-closed locally. Both should stay green as guardrails rather than being
-treated as provider/runtime/stream execution.
+`mypy src/` and `ruff check .` green, then wire Unitree event-spine refs into
+Phase 6.4 advisory runtime/eval receipts, emit neural trainability audit
+artifacts, wire bio/neuro receipt joins, and keep bounded Phase 7 receipt
+consumption on existing adapters. The provider bring-up readiness ledger is
+materialized locally as template-only, launch-blocked rows; Unitree
+rosbag2/MCAP unavailable receipts are fail-closed locally; and LeRobot
+video/camera receipts now bridge into replay rows plus CPU-safe perception seam
+samples. These should stay green as guardrails rather than being treated as
+provider/runtime/stream/video-decoding execution.
 Externally blocked provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and
 promotion-grade proof items remain blockers rather than local implementation
 claims.
@@ -251,20 +252,19 @@ Do not:
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 
-### 3. Wire LeRobot video to replay to perception receipts
+### 3. Keep LeRobot video to replay to perception receipts green
 
-- **What**: normalize local video/camera receipts into replay rows and
-  perception samples while preserving ids, timestamps, camera keys, sidecars,
-  runtime refs, provenance, and unavailable posture.
-- **Why now**: static/provider blockers are now guardrails; this is the next
-  lower-WM evidence plumbing gap that can move locally without downloads or
-  GPU.
+- **What**: retain the local video/camera receipt normalizer that writes
+  replay rows and perception samples while preserving ids, timestamps, camera
+  keys, sidecars, runtime refs, provenance, and unavailable posture.
+- **Why now**: this local lower-WM evidence plumbing is now implemented and
+  should not regress while the remaining Unitree/transport/economic joins are
+  wired.
 - **Unblocks**: perception seam and replay rows that can be consumed by later
   transport/economic audits.
-- **Verify**: video receipt -> replay row -> perception sample tests plus
-  `python3 -m mypy src/` and `python3 -m ruff check .`
+- **Verify**: `python3 -m pytest -q tests/test_lerobot_video_receipt_adapter.py tests/test_lerobot_perception_adapter.py`; `python3 scripts/economic_world_model/compile_lerobot_video_replay_perception_receipts.py`; `python3 -m mypy src/`; `python3 -m ruff check .`
 - **Do NOT**: treat CPU placeholder or flattened features as promotion-grade
-  provider truth.
+  provider truth, or call local video refs decoded frames.
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 

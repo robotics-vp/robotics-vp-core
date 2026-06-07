@@ -82,6 +82,7 @@ def _placeholder_features(
 def _flattened_features(
     image: Any,
     d_feature: int,
+    seed_str: str = "",
 ) -> torch.Tensor:
     """Flatten and project raw image to fixed dimension.
 
@@ -93,8 +94,9 @@ def _flattened_features(
         import numpy as np
         flat = torch.from_numpy(np.asarray(image)).flatten().float()
     else:
-        # Fallback: treat as placeholder
-        return torch.randn(d_feature)
+        # Fallback: treat non-array video/camera refs as deterministic
+        # placeholders rather than nondeterministic feature truth.
+        return _placeholder_features(image, d_feature, seed_str or repr(image))
 
     # Simple projection: take first d_feature elements or pad
     if flat.numel() >= d_feature:
@@ -122,7 +124,7 @@ def extract_features(
     if config.strategy == "placeholder":
         return _placeholder_features(image, config.d_feature, seed_str)
     elif config.strategy == "flattened":
-        return _flattened_features(image, config.d_feature)
+        return _flattened_features(image, config.d_feature, seed_str)
     elif config.strategy == "frozen_backbone":
         # Frozen backbone extraction requires GPU and model loading
         # This is a GPU-era capability; stub for now
@@ -157,6 +159,38 @@ def discover_camera_keys(step_obs: Mapping[str, Any]) -> List[str]:
         elif key.startswith("observation.images."):
             camera_keys.append(key[19:])  # Remove "observation.images." prefix
     return sorted(camera_keys)
+
+
+def _camera_observation_metadata(image: Any) -> dict[str, Any]:
+    if isinstance(image, Mapping):
+        return dict(image)
+    return {}
+
+
+def _camera_observation_available(image: Any) -> bool:
+    metadata = _camera_observation_metadata(image)
+    for key in ("available", "video_file_exists", "file_exists", "present"):
+        if key in metadata:
+            return bool(metadata[key])
+    return image is not None
+
+
+def _camera_observation_truth_class(
+    *,
+    image: Any,
+    step: ReplayStepRecord,
+    feature_config: FeatureExtractionConfig,
+) -> str:
+    if not _camera_observation_available(image):
+        return "unavailable"
+    metadata = _camera_observation_metadata(image)
+    if metadata.get("truth_class"):
+        return str(metadata["truth_class"])
+    if step.metadata.get("perception_sample_truth_class"):
+        return str(step.metadata["perception_sample_truth_class"])
+    if feature_config.strategy in {"placeholder", "flattened"}:
+        return "advisory_evidence"
+    return "provider_backed"
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +240,7 @@ def multi_provider_sample_from_lerobot_step(
                 image = step.obs[full_key]
                 break
 
-        if image is None:
+        if image is None or not _camera_observation_available(image):
             # Camera not available in this step
             providers.append(ProviderObservation(
                 provider_id=cam_key,
@@ -214,21 +248,42 @@ def multi_provider_sample_from_lerobot_step(
                 availability_status="unavailable",
                 truth_class="unavailable",
                 features=torch.zeros(feature_config.d_feature),
+                metadata={
+                    "camera_key": cam_key,
+                    "feature_strategy": feature_config.strategy,
+                    "unavailable_reason": _camera_observation_metadata(image).get(
+                        "unavailable_reason",
+                        "camera_observation_unavailable",
+                    ),
+                },
             ))
             continue
 
         # Extract features
         seed_str = f"{step.episode_id}_{step.step_idx}_{cam_key}"
         features = extract_features(image, feature_config, seed_str=seed_str)
+        truth_class = _camera_observation_truth_class(
+            image=image,
+            step=step,
+            feature_config=feature_config,
+        )
 
         providers.append(ProviderObservation(
             provider_id=cam_key,
             provider_kind="vision_backbone",
             availability_status="available",
-            truth_class="provider_backed",
+            truth_class=truth_class,
             features=features,
-            confidence=torch.tensor(1.0),  # Raw camera has full confidence
-            metadata={"camera_key": cam_key},
+            confidence=torch.tensor(0.5 if truth_class == "advisory_evidence" else 1.0),
+            metadata={
+                "camera_key": cam_key,
+                "feature_strategy": feature_config.strategy,
+                "feature_posture": step.metadata.get(
+                    "feature_posture",
+                    "schema_verification",
+                ),
+                **_camera_observation_metadata(image),
+            },
         ))
 
     # Task success proxy
@@ -247,6 +302,18 @@ def multi_provider_sample_from_lerobot_step(
             "task_id": step.task_id,
             "env_id": step.env_id,
             "source_domain": step.source_domain,
+            "timestamp": step.timestamp,
+            "camera_keys": list(camera_keys),
+            "feature_strategy": feature_config.strategy,
+            "feature_posture": step.metadata.get("feature_posture"),
+            "video_receipt_bridge": dict(
+                step.metadata.get("video_receipt_bridge", {}) or {}
+            ),
+            "future_training_signals": dict(
+                step.metadata.get("future_training_signals", {}) or {}
+            ),
+            "benchmark_gate": dict(step.metadata.get("benchmark_gate", {}) or {}),
+            "provenance": dict(step.provenance),
         },
     )
 

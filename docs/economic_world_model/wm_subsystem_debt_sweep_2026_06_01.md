@@ -592,6 +592,31 @@ video-to-replay-to-perception receipts, Unitree event spines into Phase 6.4
 advisory eval receipts, bio/neuro receipt joins, and neural trainability audit
 artifacts.
 
+The eighteenth local debt-burn pass closed the local LeRobot
+video-to-replay-to-perception receipt bridge. `lerobot_video_receipt_adapter.py`
+now normalizes video/camera receipts into LeRobot-like rows, rehydrates them
+through canonical replay episodes/steps, and builds CPU-safe
+EvidenceFusion/V-JEPA/projection seam samples while preserving receipt ids,
+frame indices, timestamps, camera keys, task/env ids, reward proxies,
+runtime/event/decision/objective/econ refs, provenance, and unavailable
+posture. The LeRobot rehydration bridge also preserves objective/econ refs and
+non-sidecar receipt metadata on replay rows instead of dropping them during
+round-trip conversion.
+
+Current local receipt compiler result:
+`video_receipt_count=1`, `replay_episode_count=1`, `replay_step_count=3`,
+`camera_key_count=2`, `evidence_fusion_sample_count=3`,
+`vjepa_temporal_sample_count=2`,
+`vision_backbone_projection_sample_count=3`, `provider_executed=false`,
+`gpu_training_executed=false`, `video_decoding_executed=false`,
+`weights_downloaded=false`, `unitree_hardware_truth=false`,
+`promotion_eligible=false`, and `phase7_authority_granted=false`.
+
+Remaining local debt after the LeRobot bridge pass: Unitree event spines into
+Phase 6.4 advisory eval receipts, neural trainability audit artifacts,
+bio/neuro receipt joins, and bounded Phase 7 receipt consumption through
+existing adapters only.
+
 Current residual broad ruff:
 
 | Area | Count |
@@ -784,17 +809,7 @@ Not implemented as proof:
    - Do not: broaden static cleanup into reward math, weight writes, or
      behavior-changing refactors.
 
-2. **LeRobot video to replay to perception receipts**
-   - What: normalize video/camera receipts into replay rows and perception
-     samples while preserving ids, frame/step/timestamp/camera keys, sidecars,
-     runtime refs, provenance, and unavailable posture.
-   - Why now: this advances lower-WM evidence plumbing without downloads,
-     provider execution, or GPU truth claims.
-   - Verify: video receipt -> replay rows -> perception sample tests.
-   - Do not: treat placeholder/flattened CPU features as promotion-grade
-     provider features.
-
-3. **Unitree event spines into Phase 6.4 advisory eval**
+2. **Unitree event spines into Phase 6.4 advisory eval**
    - What: use existing Unitree event-spine producers/refs and wire fresh
      `event_spine_ref` values into Phase 6.4 advisory runtime/eval receipts.
    - Why now: this gives transport eval better local lower-WM labels without
@@ -803,7 +818,7 @@ Not implemented as proof:
    - Do not: bypass receivers, grant authority, or claim hardware/provider
      proof.
 
-4. **Neural trainability audit**
+3. **Neural trainability audit**
    - What: emit additive JSON/JSONL/doc artifacts over neural/seam/encoder/
      policy/head/bridge/receiver/trainer surfaces with executable follow-up
      rows and plane routing.
@@ -813,7 +828,7 @@ Not implemented as proof:
    - Do not: train, write weights, or mark blocked components promotion
      eligible.
 
-5. **Bio/neuro receipt join wiring**
+4. **Bio/neuro receipt join wiring**
    - What: join the already-wired local substrate receipts into normal
      lower-WM/Economic consumption rows.
    - Why now: the substrate should become queryable evidence without
@@ -838,14 +853,14 @@ Burn down all remaining local subsystem debt in
 guardrails after every tranche.
 
 Further, burn down and wire all remaining local items from
-`multi_wm_unwired_surface_audit_2026_06_01.md`: LeRobot
-video-to-replay-to-perception receipt plumbing, Unitree event-spine refs into
+`multi_wm_unwired_surface_audit_2026_06_01.md`: Unitree event-spine refs into
 Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
 bio/neuro receipt joins into lower-WM/Economic consumption rows, and bounded
 Phase 7 receipt consumption through existing adapters only. Keep the
-now-hardened provider bring-up ledger and Unitree rosbag2/MCAP unavailable
-receipts green; do not claim provider, GPU, RunPod, hardware, or real
-rosbag2/MCAP imports without real artifacts and execution.
+now-hardened provider bring-up ledger, Unitree rosbag2/MCAP unavailable
+receipts, and LeRobot video-receipt replay/perception bridge green; do not
+claim provider, GPU, RunPod, hardware, video decoding, or real rosbag2/MCAP
+imports without real artifacts and execution.
 
 Keep G1/bipedal whole-body primary. Treat stable-base mobile manipulation as
 fallback/degraded mode and fixed-base tabletop/workcell/dishwashing as

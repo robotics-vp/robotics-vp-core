@@ -7221,3 +7221,58 @@ This is provider bring-up readiness only. It is safe for template storage and
 intentionally not safe for launch. It does not download weights, launch
 RunPod, execute providers, run GPU jobs, operate hardware, train, write
 weights, mutate reward/controller math, grant authority, or claim promotion.
+
+## 2026-06-07 — LeRobot video receipt replay/perception bridge
+
+### What changed
+
+- Added `src/dataset_bridges/lerobot_video_receipt_adapter.py` with typed
+  local receipt models and helpers for video/camera receipt normalization,
+  canonical replay rehydration, CPU-safe perception sample construction, and
+  artifact writing.
+- Added
+  `scripts/economic_world_model/compile_lerobot_video_replay_perception_receipts.py`
+  to emit JSON/JSONL receipts under
+  `artifacts/economic_world_model/lerobot_video_replay_perception_receipts/`.
+- Added `tests/test_lerobot_video_receipt_adapter.py`.
+- Updated the existing LeRobot replay bridge so sidecar objective/econ refs and
+  local receipt metadata survive rehydration into `ReplayStepRecord` and
+  `ReplayEpisodeRecord`.
+- Updated the LeRobot perception adapter to keep CPU placeholder/flattened
+  camera features advisory unless a real provider/backbone run exists.
+
+### Current receipts
+
+```bash
+python3 -m pytest -q tests/test_lerobot_video_receipt_adapter.py tests/test_lerobot_perception_adapter.py
+python3 scripts/economic_world_model/compile_lerobot_video_replay_perception_receipts.py
+python3 -m ruff check src/dataset_bridges/lerobot_bridge.py src/dataset_bridges/lerobot_perception_adapter.py src/dataset_bridges/lerobot_video_receipt_adapter.py src/dataset_bridges/__init__.py scripts/economic_world_model/compile_lerobot_video_replay_perception_receipts.py tests/test_lerobot_video_receipt_adapter.py tests/test_lerobot_perception_adapter.py
+python3 -m mypy src/dataset_bridges/lerobot_bridge.py src/dataset_bridges/lerobot_perception_adapter.py src/dataset_bridges/lerobot_video_receipt_adapter.py --show-error-codes --no-error-summary
+```
+
+Focused pytest result: `50 passed`.
+
+The compiler emitted:
+
+- `video_receipt_count=1`
+- `replay_episode_count=1`
+- `replay_step_count=3`
+- `camera_key_count=2`
+- `evidence_fusion_sample_count=3`
+- `vjepa_temporal_sample_count=2`
+- `vision_backbone_projection_sample_count=3`
+- `provider_executed=false`
+- `gpu_training_executed=false`
+- `video_decoding_executed=false`
+- `weights_downloaded=false`
+- `unitree_hardware_truth=false`
+- `promotion_eligible=false`
+- `phase7_authority_granted=false`
+
+### Boundary
+
+This closes local video/camera receipt plumbing into replay and perception seam
+sample shapes. It does not download external data, decode video frames, run
+SAM/DINO/SigLIP/V-JEPA/OpenVLA providers, run GPU inference/training, write
+weights, operate hardware, mutate reward/controller math, grant Phase 7
+authority, or claim promotion.
