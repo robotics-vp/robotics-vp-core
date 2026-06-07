@@ -613,9 +613,34 @@ Current local receipt compiler result:
 `promotion_eligible=false`, and `phase7_authority_granted=false`.
 
 Remaining local debt after the LeRobot bridge pass: Unitree event spines into
-Phase 6.4 advisory eval receipts, neural trainability audit artifacts,
-bio/neuro receipt joins, and bounded Phase 7 receipt consumption through
-existing adapters only.
+Phase 6.4 advisory eval receipts, neural trainability audit artifacts, and
+bounded Phase 7 receipt consumption through existing adapters only.
+
+The nineteenth local debt-burn pass closed the Unitree event-spine to Phase
+6.4 advisory runtime/eval join. `advisory_runtime.py` now emits typed
+`WMTransportUnitreeEventSpineJoin` rows and threads lower-WM event-spine refs
+into advisory proposals, transport receipts, decomposed eval reports, and the
+top-level runtime report metadata. The Phase 6.4 runner now detects the local
+CPU-August Unitree event spine when it exists and writes
+`wm_transport_unitree_event_spine_joins_v1.jsonl` beside the existing
+proposal/invocation/receipt/eval artifacts.
+
+Current local Phase 6.4 runtime result:
+`proposal_count=20`, `receipt_count=20`, `eval_report_count=20`,
+`shadow_join_slot_count=20`, `joined_shadow_outcome_count=10`,
+`unitree_event_spine_join_count=20`,
+`joined_unitree_event_spine_count=20`, `unitree_event_count=11`,
+`training_executed=false`, `weights_written=false`,
+`provider_executed=false`, `hardware_executed=false`,
+`live_policy_control=false`, `reward_math_mutation=false`, and
+`promotion_eligible=false`.
+
+Remaining local debt after the Unitree event-spine join pass: neural
+trainability audit artifacts and bounded Phase 7 receipt consumption through
+existing adapters only. Keep the full-repo static gate, provider ledger,
+Unitree rosbag2/MCAP unavailable receipts, LeRobot video-receipt bridge,
+Unitree Phase 6.4 event-spine joins, and bio/neuro receipt joins green as
+guardrails.
 
 Current residual broad ruff:
 
@@ -649,6 +674,7 @@ Legacy/support-surface disposition:
 | `src/vision/`, `src/scene/`, `src/sima2/`, `src/vla/` | provider-facing perception/semantic algorithms and VLA scaffolds | wrap as Perception/Grounding producers or advisory provider adapters; real provider outputs remain external proof |
 | `src/rl/`, `src/hrl/`, `src/policies/`, `src/process_reward/`, `src/encoders/`, `src/representation/` | trainer/runtime lanes for future lower-WM or policy components | keep but gate with manifests, receipts, no weight writes in local cleanup, and no promotion claims |
 | `src/motor_backend/`, `src/embodiment/`, `src/ingestion/`, `src/runtime/` | hardware/provider/runtime adapter layer | keep as honest unavailable/proof-emitting adapters; do not collapse stubs into hardware truth |
+| `src/deployment/` | deployment gating and evidence-source routing for Economic WM decisions | keep as CPU-only deterministic receipt emitters; use it to decide which evidence source is worth paying for, not to claim provider/GPU/hardware proof |
 | `src/economics/`, `src/valuation/`, `src/ontology/`, `src/evidence/`, `src/contracts/` | cross-cutting economic, receipt, and evidence contracts | keep; avoid mutating frozen Phase B math or controller equations |
 | `scripts/`, `third_party/`, old demos/trainers | operational glue and historical smoke/prototype entrypoints | fix undefined names and safe lint; then either document as legacy/dev-only or migrate into receipt-emitting scripts |
 
@@ -681,8 +707,9 @@ separate next-action queue.
 | Local item | Source audit status | Why it is local | Next Action | Verify |
 | --- | --- | --- | --- | --- |
 | Static debt burn-down | ranked next local action | It is code/docs/test cleanup over checked-in support surfaces. | Continue mypy by family, then ruff by bug-first bucket. | `python3 -m mypy src/`; `python3 -m ruff check .` |
-| Provider bring-up readiness ledger | missing local ledger | It maps provider families to commands, receipts, unavailable posture, RunPod profile, and owner WM without downloading weights or running providers. | Add a typed ledger/checker for SAM/SAM3D, DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma. | ledger lint plus `python3 scripts/runpod/prepare_launch_manifest.py --profile provider_bringup --volume-id "$RUNPOD_VOLUME_ID"` when prerequisites exist |
-| Bio/neuro substrate receipt joins | substrate wired but isolated | Existing local receipts should become queryable lower-WM/Economic evidence rows without becoming promotion proof. | Add optional joins from `check_bio_neuro_substrate.py` output into lower-WM/economic consumption rows. | `python3 scripts/economic_world_model/check_bio_neuro_substrate.py --output-dir /tmp/bio_neuro` plus focused lower-WM consumption tests |
+| Provider bring-up readiness ledger | local ledger materialized | It maps provider families to commands, receipts, unavailable posture, RunPod profile, and owner WM without downloading weights or running providers. | Keep the ledger/checker current for SAM/SAM3D, DINO/SigLIP, V-JEPA2, OpenVLA, Isaac/Unitree, and Holosoma. | `python3 scripts/economic_world_model/compile_provider_bringup_readiness_ledger.py` plus launch manifest preparation only when prerequisites exist |
+| Unitree event-spine Phase 6.4 joins | local advisory join materialized | It threads existing Unitree lower-WM event-spine refs into Phase 6.4 proposals, receipts, eval reports, and join rows. | Keep `wm_transport_unitree_event_spine_joins_v1.jsonl` emission green while training/provider/hardware proof remains denied. | `python3 -m pytest -q tests/test_wm_transport_phase64_runtime_eval.py`; `python3 scripts/economic_world_model/run_phase6_transport_advisory_runtime.py --no-run-dependencies` |
+| Bio/neuro substrate receipt joins | local receipt joins materialized | Existing local receipts are queryable lower-WM/Economic evidence rows without becoming promotion proof. | Keep `check_bio_neuro_substrate.py` receipt joins green and preserve `phase7_abstraction_expanded=false`. | `python3 scripts/economic_world_model/check_bio_neuro_substrate.py --output-dir /tmp/bio_neuro` plus focused lower-WM consumption tests |
 | Phase 7 bounded consumption | shadow adapters exist | Existing Phase 7 signal adapters can consume better lower-WM receipts once joins exist. | Wire only through existing adapters; do not add abstract Phase 7 vocabulary unless lower-WM receipts force it. | `python3 -m pytest -q tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py` |
 | Script/smoke entrypoint hygiene | old operational glue | Direct script commands are local and should not require undocumented import paths. | Continue fixing direct-entry scripts where `ruff F821` or smoke runs show broken imports; classify unrecoverable old demos as dev-only. | relevant script smoke plus `python3 -m ruff check .` |
 
@@ -809,16 +836,7 @@ Not implemented as proof:
    - Do not: broaden static cleanup into reward math, weight writes, or
      behavior-changing refactors.
 
-2. **Unitree event spines into Phase 6.4 advisory eval**
-   - What: use existing Unitree event-spine producers/refs and wire fresh
-     `event_spine_ref` values into Phase 6.4 advisory runtime/eval receipts.
-   - Why now: this gives transport eval better local lower-WM labels without
-     inventing a parallel event model.
-   - Verify: refs -> receipts/evals tests with blocker/unavailable gates.
-   - Do not: bypass receivers, grant authority, or claim hardware/provider
-     proof.
-
-3. **Neural trainability audit**
+2. **Neural trainability audit**
    - What: emit additive JSON/JSONL/doc artifacts over neural/seam/encoder/
      policy/head/bridge/receiver/trainer surfaces with executable follow-up
      rows and plane routing.
@@ -828,14 +846,15 @@ Not implemented as proof:
    - Do not: train, write weights, or mark blocked components promotion
      eligible.
 
-4. **Bio/neuro receipt join wiring**
-   - What: join the already-wired local substrate receipts into normal
-     lower-WM/Economic consumption rows.
-   - Why now: the substrate should become queryable evidence without
-     pretending it is trained or promotion-grade.
-   - Verify: substrate checker plus focused lower-WM consumption tests.
-   - Do not: treat the joins as active sensing execution, interoceptive
-     hardware telemetry, trained anomaly critics, or Phase 7 authority.
+3. **Bounded Phase 7 receipt consumption**
+   - What: consume the now-clean local lower-WM receipt families through
+     existing Phase 7 signal adapters only.
+   - Why now: Unitree, LeRobot, provider-ledger, and bio/neuro receipt joins
+     are available as local labels, but Phase 7 must stay a bounded consumer
+     rather than a new abstraction expansion.
+   - Verify: `python3 -m pytest -q tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py`
+   - Do not: grant authority, add broad Phase 7 vocabulary, or treat local
+     receipt joins as live lower-WM proof.
 
 ## Updated Goal Message For Next Session
 
@@ -853,14 +872,13 @@ Burn down all remaining local subsystem debt in
 guardrails after every tranche.
 
 Further, burn down and wire all remaining local items from
-`multi_wm_unwired_surface_audit_2026_06_01.md`: Unitree event-spine refs into
-Phase 6.4 advisory runtime/eval receipts, neural trainability audit artifacts,
-bio/neuro receipt joins into lower-WM/Economic consumption rows, and bounded
-Phase 7 receipt consumption through existing adapters only. Keep the
-now-hardened provider bring-up ledger, Unitree rosbag2/MCAP unavailable
-receipts, and LeRobot video-receipt replay/perception bridge green; do not
-claim provider, GPU, RunPod, hardware, video decoding, or real rosbag2/MCAP
-imports without real artifacts and execution.
+`multi_wm_unwired_surface_audit_2026_06_01.md`: neural trainability audit
+artifacts and bounded Phase 7 receipt consumption through existing adapters
+only. Keep the now-hardened provider bring-up ledger, Unitree rosbag2/MCAP
+unavailable receipts, LeRobot video-receipt replay/perception bridge, Unitree
+Phase 6.4 event-spine joins, and bio/neuro receipt joins green; do not claim
+provider, GPU, RunPod, hardware, video decoding, or real rosbag2/MCAP imports
+without real artifacts and execution.
 
 Keep G1/bipedal whole-body primary. Treat stable-base mobile manipulation as
 fallback/degraded mode and fixed-base tabletop/workcell/dishwashing as

@@ -32,6 +32,9 @@ WM_TRANSPORT_DECOMPOSED_EVAL_REPORT_VERSION = (
 WM_TRANSPORT_ADVISORY_RUNTIME_REPORT_VERSION = (
     "wm_transport_advisory_runtime_report_v1"
 )
+WM_TRANSPORT_UNITREE_EVENT_SPINE_JOIN_VERSION = (
+    "wm_transport_unitree_event_spine_join_v1"
+)
 
 DENIED_TRANSPORT_RUNTIME_AUTHORITIES = (
     "training_execution",
@@ -207,6 +210,91 @@ class WMTransportShadowOutcomeJoinSlot:
             metadata=_mapping(payload.get("metadata")),
             version=str(
                 payload.get("version", WM_TRANSPORT_SHADOW_JOIN_SLOT_VERSION)
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class WMTransportUnitreeEventSpineJoin:
+    """Lower-WM event-spine label joined to one advisory transport proposal."""
+
+    join_id: str
+    proposal_id: str
+    contract_id: str
+    bridge_key: str
+    source_wm: str
+    target_wm: str
+    join_status: str
+    event_spine_ref: str
+    event_count: int
+    event_ids: list[str] = field(default_factory=list)
+    event_kinds: list[str] = field(default_factory=list)
+    lower_wm_label_only: bool = True
+    provider_executed: bool = False
+    hardware_executed: bool = False
+    live_policy_control: bool = False
+    reward_math_mutation: bool = False
+    promotion_eligible: bool = False
+    blockers: list[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    version: str = WM_TRANSPORT_UNITREE_EVENT_SPINE_JOIN_VERSION
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "join_id": self.join_id,
+            "version": self.version,
+            "proposal_id": self.proposal_id,
+            "contract_id": self.contract_id,
+            "bridge_key": self.bridge_key,
+            "source_wm": self.source_wm,
+            "target_wm": self.target_wm,
+            "join_status": self.join_status,
+            "event_spine_ref": self.event_spine_ref,
+            "event_count": int(self.event_count),
+            "event_ids": list(self.event_ids),
+            "event_kinds": list(self.event_kinds),
+            "lower_wm_label_only": bool(self.lower_wm_label_only),
+            "provider_executed": bool(self.provider_executed),
+            "hardware_executed": bool(self.hardware_executed),
+            "live_policy_control": bool(self.live_policy_control),
+            "reward_math_mutation": bool(self.reward_math_mutation),
+            "promotion_eligible": bool(self.promotion_eligible),
+            "blockers": list(self.blockers),
+            "metadata": _mapping(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(
+        cls, payload: Mapping[str, Any]
+    ) -> "WMTransportUnitreeEventSpineJoin":
+        return cls(
+            join_id=str(payload.get("join_id", "")),
+            proposal_id=str(payload.get("proposal_id", "")),
+            contract_id=str(payload.get("contract_id", "")),
+            bridge_key=str(payload.get("bridge_key", "")),
+            source_wm=str(payload.get("source_wm", "")),
+            target_wm=str(payload.get("target_wm", "")),
+            join_status=str(payload.get("join_status", "")),
+            event_spine_ref=str(payload.get("event_spine_ref", "")),
+            event_count=int(payload.get("event_count", 0) or 0),
+            event_ids=[
+                str(item) for item in list(payload.get("event_ids", []) or [])
+            ],
+            event_kinds=[
+                str(item) for item in list(payload.get("event_kinds", []) or [])
+            ],
+            lower_wm_label_only=bool(payload.get("lower_wm_label_only", True)),
+            provider_executed=bool(payload.get("provider_executed", False)),
+            hardware_executed=bool(payload.get("hardware_executed", False)),
+            live_policy_control=bool(payload.get("live_policy_control", False)),
+            reward_math_mutation=bool(payload.get("reward_math_mutation", False)),
+            promotion_eligible=bool(payload.get("promotion_eligible", False)),
+            blockers=[str(item) for item in list(payload.get("blockers", []) or [])],
+            metadata=_mapping(payload.get("metadata")),
+            version=str(
+                payload.get(
+                    "version", WM_TRANSPORT_UNITREE_EVENT_SPINE_JOIN_VERSION
+                )
             ),
         )
 
@@ -1239,6 +1327,210 @@ def build_wm_transport_advisory_runtime(
     return report, proposals, invocations, receipts, eval_reports
 
 
+def _event_rows(event_spine_payload: Mapping[str, Any]) -> list[Dict[str, Any]]:
+    return [
+        _mapping(row)
+        for row in list(event_spine_payload.get("events", []) or [])
+        if isinstance(row, Mapping)
+    ]
+
+
+def build_wm_transport_unitree_event_spine_joins(
+    *,
+    proposals: Iterable[TransportProposal],
+    event_spine_payload: Mapping[str, Any],
+    event_spine_ref: str,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> list[WMTransportUnitreeEventSpineJoin]:
+    """Build lower-WM Unitree event-spine labels for Phase-6.4 eval rows."""
+
+    events = _event_rows(event_spine_payload)
+    event_ids = [str(row.get("event_id", "")) for row in events if row.get("event_id")]
+    event_kinds = sorted(
+        {str(row.get("event_kind", "")) for row in events if row.get("event_kind")}
+    )
+    rows: list[WMTransportUnitreeEventSpineJoin] = []
+    for proposal in proposals:
+        payload = {
+            "proposal_id": proposal.proposal_id,
+            "contract_id": proposal.contract_id,
+            "event_spine_ref": event_spine_ref,
+            "event_ids": event_ids,
+        }
+        rows.append(
+            WMTransportUnitreeEventSpineJoin(
+                join_id=f"wm_transport_unitree_event_join_{sha256_json(payload)[:16]}",
+                proposal_id=proposal.proposal_id,
+                contract_id=proposal.contract_id,
+                bridge_key=proposal.bridge_key,
+                source_wm=proposal.source_wm,
+                target_wm=proposal.target_wm,
+                join_status=(
+                    "joined_unitree_event_spine_ref"
+                    if events and event_spine_ref
+                    else "awaiting_unitree_event_spine_ref"
+                ),
+                event_spine_ref=event_spine_ref,
+                event_count=len(events),
+                event_ids=event_ids,
+                event_kinds=event_kinds,
+                blockers=list(PHASE64_ADVISORY_RUNTIME_BLOCKERS),
+                metadata={
+                    "phase": "6.4_transport_unitree_event_spine_join",
+                    "label_scope": "lower_wm_event_label_only",
+                    "event_spine_run_id": str(event_spine_payload.get("run_id", "")),
+                    **_mapping(metadata),
+                },
+            )
+        )
+    return rows
+
+
+def _join_metadata(
+    join: Optional[WMTransportUnitreeEventSpineJoin],
+) -> Dict[str, Any]:
+    if join is None:
+        return {}
+    return {
+        "unitree_event_spine_join_id": join.join_id,
+        "unitree_event_spine_join_status": join.join_status,
+        "unitree_event_spine_ref": join.event_spine_ref,
+        "unitree_event_count": join.event_count,
+        "unitree_event_kinds": list(join.event_kinds),
+        "unitree_event_lower_wm_label_only": True,
+    }
+
+
+def attach_unitree_event_spine_joins_to_advisory_runtime(
+    *,
+    report: WMTransportAdvisoryRuntimeReport,
+    proposals: Iterable[TransportProposal],
+    receipts: Iterable[TransportReceipt],
+    eval_reports: Iterable[WMTransportDecomposedEvalReport],
+    unitree_event_spine_joins: Iterable[WMTransportUnitreeEventSpineJoin],
+) -> tuple[
+    WMTransportAdvisoryRuntimeReport,
+    list[TransportProposal],
+    list[TransportReceipt],
+    list[WMTransportDecomposedEvalReport],
+]:
+    """Attach Unitree event-spine join refs to existing advisory artifacts."""
+
+    joins_by_proposal = {
+        row.proposal_id: row for row in list(unitree_event_spine_joins)
+    }
+    enriched_proposals = [
+        TransportProposal(
+            **{
+                **proposal.__dict__,
+                "metadata": {
+                    **dict(proposal.metadata),
+                    **_join_metadata(joins_by_proposal.get(proposal.proposal_id)),
+                },
+            }
+        )
+        for proposal in proposals
+    ]
+    enriched_receipts = [
+        TransportReceipt(
+            **{
+                **receipt.__dict__,
+                "metadata": {
+                    **dict(receipt.metadata),
+                    **_join_metadata(joins_by_proposal.get(receipt.proposal_id)),
+                },
+            }
+        )
+        for receipt in receipts
+    ]
+    enriched_evals = [
+        WMTransportDecomposedEvalReport(
+            **{
+                **eval_report.__dict__,
+                "metadata": {
+                    **dict(eval_report.metadata),
+                    **_join_metadata(joins_by_proposal.get(eval_report.proposal_id)),
+                },
+            }
+        )
+        for eval_report in eval_reports
+    ]
+    joins = list(joins_by_proposal.values())
+    joined = sum(
+        1 for row in joins if row.join_status == "joined_unitree_event_spine_ref"
+    )
+    report = WMTransportAdvisoryRuntimeReport(
+        **{
+            **report.__dict__,
+            "aggregate_counts": {
+                **dict(report.aggregate_counts),
+                "unitree_event_spine_join_count": float(len(joins)),
+                "joined_unitree_event_spine_count": float(joined),
+                "unitree_event_count": float(
+                    max((row.event_count for row in joins), default=0)
+                ),
+            },
+            "metadata": {
+                **dict(report.metadata),
+                "unitree_event_spine_joined": bool(joined),
+                "unitree_event_spine_join_count": len(joins),
+                "unitree_event_spine_lower_wm_label_only": True,
+            },
+        }
+    )
+    return report, enriched_proposals, enriched_receipts, enriched_evals
+
+
+def build_wm_transport_advisory_runtime_with_unitree_event_spine(
+    *,
+    contracts: Iterable[WMTransportBridgeContract],
+    roundtrip_receipts: Iterable[WMTransportRoundTripReceipt],
+    neural_manifest: WMTransportNeuralArchitectureManifest,
+    trainer_manifest: WMTransportTrainerScaffoldManifest,
+    event_spine_payload: Mapping[str, Any],
+    event_spine_ref: str,
+    shadow_outcome_receipts: Optional[Iterable[Any]] = None,
+    artifact_refs: Optional[Mapping[str, Any]] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> tuple[
+    WMTransportAdvisoryRuntimeReport,
+    list[TransportProposal],
+    list[TransportInvocation],
+    list[TransportReceipt],
+    list[WMTransportDecomposedEvalReport],
+    list[WMTransportUnitreeEventSpineJoin],
+]:
+    """Build advisory runtime artifacts and attach Unitree event-spine refs."""
+
+    report, proposals, invocations, receipts, eval_reports = (
+        build_wm_transport_advisory_runtime(
+            contracts=contracts,
+            roundtrip_receipts=roundtrip_receipts,
+            neural_manifest=neural_manifest,
+            trainer_manifest=trainer_manifest,
+            shadow_outcome_receipts=shadow_outcome_receipts,
+            artifact_refs=artifact_refs,
+            metadata=metadata,
+        )
+    )
+    joins = build_wm_transport_unitree_event_spine_joins(
+        proposals=proposals,
+        event_spine_payload=event_spine_payload,
+        event_spine_ref=event_spine_ref,
+        metadata=metadata,
+    )
+    report, proposals, receipts, eval_reports = (
+        attach_unitree_event_spine_joins_to_advisory_runtime(
+            report=report,
+            proposals=proposals,
+            receipts=receipts,
+            eval_reports=eval_reports,
+            unitree_event_spine_joins=joins,
+        )
+    )
+    return report, proposals, invocations, receipts, eval_reports, joins
+
+
 def save_wm_transport_advisory_runtime(
     *,
     report_path: str | Path,
@@ -1251,12 +1543,19 @@ def save_wm_transport_advisory_runtime(
     receipts: Iterable[TransportReceipt],
     eval_reports_path: str | Path,
     eval_reports: Iterable[WMTransportDecomposedEvalReport],
+    unitree_event_spine_joins_path: str | Path | None = None,
+    unitree_event_spine_joins: Iterable[WMTransportUnitreeEventSpineJoin] = (),
 ) -> None:
     _write_json(report_path, report.to_dict())
     _write_jsonl(proposals_path, [item.to_dict() for item in proposals])
     _write_jsonl(invocations_path, [item.to_dict() for item in invocations])
     _write_jsonl(receipts_path, [item.to_dict() for item in receipts])
     _write_jsonl(eval_reports_path, [item.to_dict() for item in eval_reports])
+    if unitree_event_spine_joins_path is not None:
+        _write_jsonl(
+            unitree_event_spine_joins_path,
+            [item.to_dict() for item in unitree_event_spine_joins],
+        )
 
 
 def load_wm_transport_advisory_runtime_report(
@@ -1283,6 +1582,14 @@ def load_wm_transport_decomposed_eval_reports(
     return [WMTransportDecomposedEvalReport.from_dict(row) for row in _load_jsonl(path)]
 
 
+def load_wm_transport_unitree_event_spine_joins(
+    path: str | Path,
+) -> list[WMTransportUnitreeEventSpineJoin]:
+    return [
+        WMTransportUnitreeEventSpineJoin.from_dict(row) for row in _load_jsonl(path)
+    ]
+
+
 __all__ = [
     "DENIED_TRANSPORT_RUNTIME_AUTHORITIES",
     "PHASE64_ADVISORY_RUNTIME_BLOCKERS",
@@ -1292,17 +1599,23 @@ __all__ = [
     "WM_TRANSPORT_PROPOSAL_VERSION",
     "WM_TRANSPORT_RECEIPT_VERSION",
     "WM_TRANSPORT_SHADOW_JOIN_SLOT_VERSION",
+    "WM_TRANSPORT_UNITREE_EVENT_SPINE_JOIN_VERSION",
     "TransportInvocation",
     "TransportProposal",
     "TransportReceipt",
     "WMTransportAdvisoryRuntimeReport",
     "WMTransportDecomposedEvalReport",
     "WMTransportShadowOutcomeJoinSlot",
+    "WMTransportUnitreeEventSpineJoin",
+    "attach_unitree_event_spine_joins_to_advisory_runtime",
     "build_wm_transport_advisory_runtime",
+    "build_wm_transport_advisory_runtime_with_unitree_event_spine",
+    "build_wm_transport_unitree_event_spine_joins",
     "load_wm_transport_advisory_runtime_report",
     "load_wm_transport_decomposed_eval_reports",
     "load_wm_transport_invocations",
     "load_wm_transport_proposals",
     "load_wm_transport_receipts",
+    "load_wm_transport_unitree_event_spine_joins",
     "save_wm_transport_advisory_runtime",
 ]

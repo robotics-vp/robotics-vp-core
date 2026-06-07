@@ -27,6 +27,8 @@ from src.world_model.economic_world_model.shadow_outcomes import (  # noqa: E402
     load_economic_wm_shadow_outcome_receipts,
 )
 from src.world_model.transport import (  # noqa: E402
+    WMTransportUnitreeEventSpineJoin,
+    build_wm_transport_advisory_runtime_with_unitree_event_spine,
     build_wm_transport_advisory_runtime,
     load_wm_transport_bridge_contracts,
     load_wm_transport_neural_architecture_manifest,
@@ -49,6 +51,9 @@ DEFAULT_SHADOW_OUTCOMES = Path(
     "artifacts/economic_world_model/economic_wm_shadow_outcome_loop/"
     "economic_wm_shadow_outcome_receipts_v1.jsonl"
 )
+DEFAULT_UNITREE_EVENT_SPINE = Path(
+    "artifacts/economic_world_model/cpu_august_gap_execution/event_spine.json"
+)
 
 
 def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
@@ -64,6 +69,10 @@ def _write_markdown(path: Path, payload: Mapping[str, Any]) -> None:
         f"- Decomposed eval reports: `{payload['eval_report_count']}`",
         f"- Shadow join slots: `{payload['shadow_join_slot_count']}`",
         f"- Joined shadow outcomes: `{payload['joined_shadow_outcome_count']}`",
+        "- Unitree event-spine joins: "
+        f"`{int(dict(payload.get('aggregate_counts', {}) or {}).get('unitree_event_spine_join_count', 0))}`",
+        "- Joined Unitree event-spine refs: "
+        f"`{int(dict(payload.get('aggregate_counts', {}) or {}).get('joined_unitree_event_spine_count', 0))}`",
         f"- Ready for decomposed eval: `{str(payload['ready_for_decomposed_eval']).lower()}`",
         f"- Ready for training: `{str(payload['ready_for_training']).lower()}`",
         f"- Training executed: `{str(payload['training_executed']).lower()}`",
@@ -142,6 +151,16 @@ def _load_shadow_outcomes(path: Optional[str | Path]) -> list[Any]:
     return list(load_economic_wm_shadow_outcome_receipts(target))
 
 
+def _load_optional_json(path: Optional[str | Path]) -> dict[str, Any]:
+    if not path:
+        return {}
+    target = Path(path)
+    if not target.exists():
+        return {}
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
 def run_phase6_transport_advisory_runtime(
     *,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
@@ -149,6 +168,7 @@ def run_phase6_transport_advisory_runtime(
     neural_dir: str | Path = DEFAULT_NEURAL_DIR,
     trainer_dir: str | Path = DEFAULT_TRAINER_DIR,
     shadow_outcomes_path: Optional[str | Path] = DEFAULT_SHADOW_OUTCOMES,
+    unitree_event_spine_path: Optional[str | Path] = DEFAULT_UNITREE_EVENT_SPINE,
     run_dependencies_if_missing: bool = True,
 ) -> dict[str, Any]:
     output = Path(output_dir)
@@ -164,6 +184,9 @@ def run_phase6_transport_advisory_runtime(
     invocations_path = output / "wm_transport_advisory_invocations_v1.jsonl"
     receipts_path = output / "wm_transport_advisory_receipts_v1.jsonl"
     eval_reports_path = output / "wm_transport_decomposed_eval_reports_v1.jsonl"
+    unitree_event_spine_joins_path = (
+        output / "wm_transport_unitree_event_spine_joins_v1.jsonl"
+    )
     report_path = output / "wm_transport_advisory_runtime_report_v1.json"
     markdown_path = output / "wm_transport_advisory_runtime_v1.md"
     artifact_refs = {
@@ -172,10 +195,12 @@ def run_phase6_transport_advisory_runtime(
         "neural_manifest_path": str(input_paths["neural_manifest"]),
         "trainer_manifest_path": str(input_paths["trainer_manifest"]),
         "shadow_outcomes_path": str(shadow_outcomes_path or ""),
+        "unitree_event_spine_path": str(unitree_event_spine_path or ""),
         "proposals_path": str(proposals_path),
         "invocations_path": str(invocations_path),
         "receipts_path": str(receipts_path),
         "eval_reports_path": str(eval_reports_path),
+        "unitree_event_spine_joins_path": str(unitree_event_spine_joins_path),
         "report_path": str(report_path),
         "markdown_path": str(markdown_path),
     }
@@ -191,9 +216,25 @@ def run_phase6_transport_advisory_runtime(
         input_paths["trainer_manifest"]
     )
     shadow_outcomes = _load_shadow_outcomes(shadow_outcomes_path)
+    unitree_event_spine = _load_optional_json(unitree_event_spine_path)
 
-    report, proposals, invocations, receipts, eval_reports = (
-        build_wm_transport_advisory_runtime(
+    unitree_joins: list[WMTransportUnitreeEventSpineJoin] = []
+    if unitree_event_spine:
+        report, proposals, invocations, receipts, eval_reports, unitree_joins = (
+            build_wm_transport_advisory_runtime_with_unitree_event_spine(
+                contracts=contracts,
+                roundtrip_receipts=roundtrip_receipts,
+                neural_manifest=neural_manifest,
+                trainer_manifest=trainer_manifest,
+                shadow_outcome_receipts=shadow_outcomes,
+                event_spine_payload=unitree_event_spine,
+                event_spine_ref=str(unitree_event_spine_path or ""),
+                artifact_refs=artifact_refs,
+            )
+        )
+    else:
+        report, proposals, invocations, receipts, eval_reports = (
+            build_wm_transport_advisory_runtime(
             contracts=contracts,
             roundtrip_receipts=roundtrip_receipts,
             neural_manifest=neural_manifest,
@@ -201,7 +242,7 @@ def run_phase6_transport_advisory_runtime(
             shadow_outcome_receipts=shadow_outcomes,
             artifact_refs=artifact_refs,
         )
-    )
+        )
     save_wm_transport_advisory_runtime(
         report_path=report_path,
         report=report,
@@ -213,6 +254,8 @@ def run_phase6_transport_advisory_runtime(
         receipts=receipts,
         eval_reports_path=eval_reports_path,
         eval_reports=eval_reports,
+        unitree_event_spine_joins_path=unitree_event_spine_joins_path,
+        unitree_event_spine_joins=unitree_joins,
     )
     payload = report.to_dict()
     _write_markdown(markdown_path, payload)
@@ -227,6 +270,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--neural-dir", default=str(DEFAULT_NEURAL_DIR))
     parser.add_argument("--trainer-dir", default=str(DEFAULT_TRAINER_DIR))
     parser.add_argument("--shadow-outcomes", default=str(DEFAULT_SHADOW_OUTCOMES))
+    parser.add_argument(
+        "--unitree-event-spine",
+        default=str(DEFAULT_UNITREE_EVENT_SPINE),
+    )
     parser.add_argument("--no-run-dependencies", action="store_true")
     return parser.parse_args()
 
@@ -239,6 +286,7 @@ def main() -> int:
         neural_dir=args.neural_dir,
         trainer_dir=args.trainer_dir,
         shadow_outcomes_path=args.shadow_outcomes,
+        unitree_event_spine_path=args.unitree_event_spine,
         run_dependencies_if_missing=not args.no_run_dependencies,
     )
     return (

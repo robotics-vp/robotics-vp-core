@@ -36,7 +36,9 @@ from src.world_model.transport import (
     load_wm_transport_phase6_closure_audit,
     load_wm_transport_proposals,
     load_wm_transport_receipts,
+    load_wm_transport_unitree_event_spine_joins,
 )
+from src.runtime.event_spine import RuntimeEvent, event_spine_sidecar_payload
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -195,6 +197,56 @@ def _shadow_outcome_path(tmp_path: Path) -> Path:
     return path
 
 
+def _unitree_event_spine_path(tmp_path: Path) -> Path:
+    events = [
+        RuntimeEvent.from_components(
+            run_id="unitree_phase64_fixture",
+            episode_id="unitree_phase64_episode_000",
+            timestamp="2026-06-07T00:00:00+00:00",
+            event_kind="unitree_trace_import_bundle_recorded",
+            sequence_idx=0,
+            scope={"robot_family": "unitree_g1", "posture": "bipedal_whole_body"},
+            runtime_packet_id=None,
+            contract_id="unitree_phase64_fixture_contract",
+            receipt_label_refs=["trace_replay_receipt_001"],
+            artifact_refs={"replay_ref": "unitree_replay_steps_v1.jsonl"},
+            provenance={"source": "phase64_test_fixture"},
+            metadata={
+                "hardware_executed": False,
+                "provider_executed": False,
+                "promotion_eligible": False,
+            },
+        ),
+        RuntimeEvent.from_components(
+            run_id="unitree_phase64_fixture",
+            episode_id="unitree_phase64_episode_000",
+            timestamp="2026-06-07T00:00:01+00:00",
+            event_kind="unitree_runtime_blocker_probe_recorded",
+            sequence_idx=1,
+            scope={"robot_family": "unitree_g1", "posture": "bipedal_whole_body"},
+            runtime_packet_id=None,
+            contract_id="unitree_phase64_fixture_contract",
+            receipt_label_refs=["blocker_probe_receipt_001"],
+            artifact_refs={"blocker_ref": "phase4_unitree_blocker_probe.json"},
+            provenance={"source": "phase64_test_fixture"},
+            metadata={
+                "hardware_executed": False,
+                "provider_executed": False,
+                "promotion_eligible": False,
+            },
+        ),
+    ]
+    path = tmp_path / "unitree_event_spine.json"
+    _write_json(
+        path,
+        event_spine_sidecar_payload(
+            run_id="unitree_phase64_fixture",
+            events=events,
+        ),
+    )
+    return path
+
+
 def test_phase64_runtime_emits_advisory_surfaces_and_decomposed_eval(tmp_path):
     scaffold_dir, neural_dir, trainer_dir = _materialize_phase64_inputs(tmp_path)
     shadow_path = _shadow_outcome_path(tmp_path)
@@ -283,6 +335,57 @@ def test_phase64_runtime_keeps_shadow_join_slots_open_when_outcomes_missing(tmp_
         for slot in economic_slots
     )
     assert not any(slot.promotion_eligible for slot in economic_slots)
+
+
+def test_phase64_runtime_threads_unitree_event_spine_refs_into_eval(tmp_path):
+    scaffold_dir, neural_dir, trainer_dir = _materialize_phase64_inputs(tmp_path)
+    event_spine_path = _unitree_event_spine_path(tmp_path)
+
+    payload = run_phase6_transport_advisory_runtime(
+        output_dir=tmp_path / "phase64_runtime_unitree_events",
+        scaffold_dir=scaffold_dir,
+        neural_dir=neural_dir,
+        trainer_dir=trainer_dir,
+        shadow_outcomes_path=_shadow_outcome_path(tmp_path),
+        unitree_event_spine_path=event_spine_path,
+        run_dependencies_if_missing=False,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["aggregate_counts"]["unitree_event_spine_join_count"] == 4.0
+    assert payload["aggregate_counts"]["joined_unitree_event_spine_count"] == 4.0
+    assert payload["aggregate_counts"]["unitree_event_count"] == 2.0
+    assert payload["metadata"]["unitree_event_spine_joined"] is True
+
+    refs = payload["artifact_refs"]
+    joins = load_wm_transport_unitree_event_spine_joins(
+        refs["unitree_event_spine_joins_path"]
+    )
+    proposals = load_wm_transport_proposals(refs["proposals_path"])
+    receipts = load_wm_transport_receipts(refs["receipts_path"])
+    evals = load_wm_transport_decomposed_eval_reports(refs["eval_reports_path"])
+
+    assert len(joins) == 4
+    assert all(join.join_status == "joined_unitree_event_spine_ref" for join in joins)
+    assert all(join.event_spine_ref == str(event_spine_path) for join in joins)
+    assert not any(join.provider_executed for join in joins)
+    assert not any(join.hardware_executed for join in joins)
+    assert not any(join.live_policy_control for join in joins)
+    assert not any(join.reward_math_mutation for join in joins)
+    assert not any(join.promotion_eligible for join in joins)
+    assert all(
+        proposal.metadata["unitree_event_spine_join_status"]
+        == "joined_unitree_event_spine_ref"
+        for proposal in proposals
+    )
+    assert all(
+        receipt.metadata["unitree_event_spine_ref"] == str(event_spine_path)
+        for receipt in receipts
+    )
+    assert all(
+        eval_report.metadata["unitree_event_lower_wm_label_only"] is True
+        for eval_report in evals
+    )
 
 
 def test_phase6_closure_audit_confirms_only_evidence_blockers_remain(tmp_path):

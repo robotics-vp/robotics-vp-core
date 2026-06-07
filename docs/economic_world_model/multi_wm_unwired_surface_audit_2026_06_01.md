@@ -48,15 +48,17 @@ After the full-repo static debt burn-down, the current
 local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
 sweep now owns the live ordering for remaining local work: keep full-repo
-`mypy src/` and `ruff check .` green, then wire Unitree event-spine refs into
-Phase 6.4 advisory runtime/eval receipts, emit neural trainability audit
-artifacts, wire bio/neuro receipt joins, and keep bounded Phase 7 receipt
-consumption on existing adapters. The provider bring-up readiness ledger is
+`mypy src/` and `ruff check .` green, then emit neural trainability audit
+artifacts and keep bounded Phase 7 receipt consumption on existing adapters.
+The provider bring-up readiness ledger is
 materialized locally as template-only, launch-blocked rows; Unitree
 rosbag2/MCAP unavailable receipts are fail-closed locally; and LeRobot
 video/camera receipts now bridge into replay rows plus CPU-safe perception seam
-samples. These should stay green as guardrails rather than being treated as
-provider/runtime/stream/video-decoding execution.
+samples. Unitree event-spine refs now join into Phase 6.4 advisory
+proposal/receipt/eval metadata plus `wm_transport_unitree_event_spine_joins_v1`
+rows, and bio/neuro substrate receipts already join into lower-WM/Economic
+consumption rows. These should stay green as guardrails rather than being
+treated as provider/runtime/stream/video-decoding execution.
 Externally blocked provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and
 promotion-grade proof items remain blockers rather than local implementation
 claims.
@@ -268,15 +270,15 @@ Do not:
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 
-### 4. Wire Unitree event spines into Phase 6.4 eval
+### 4. Keep Unitree event-spine Phase 6.4 joins green
 
-- **What**: thread existing Unitree event-spine refs into Phase 6.4 advisory
-  runtime/eval receipts as lower-WM labels.
-- **Why now**: this connects existing transport eval to G1-target local lower-WM
-  receipts without inventing a parallel event model.
-- **Unblocks**: cleaner transport closure evidence before GPU/provider/hardware
-  sessions.
-- **Verify**: refs -> advisory receipts/evals tests with denied gates false.
+- **What**: retain the Phase 6.4 advisory runtime/eval join rows that thread
+  existing Unitree event-spine refs into proposals, receipts, eval reports, and
+  runtime metadata as lower-WM labels.
+- **Why now**: this local lower-WM label path is implemented and should not
+  regress before GPU/provider/hardware sessions.
+- **Unblocks**: cleaner transport closure evidence before external proof.
+- **Verify**: `python3 -m pytest -q tests/test_wm_transport_phase64_runtime_eval.py`; `python3 scripts/economic_world_model/run_phase6_transport_advisory_runtime.py --no-run-dependencies`
 - **Do NOT**: bypass receivers, grant authority, or claim hardware/provider
   proof.
 - **Confidence**: high
@@ -297,13 +299,12 @@ Do not:
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 
-### 6. Wire bio/neuro substrate into normal receipt joins
+### 6. Keep bio/neuro substrate receipt joins green
 
-- **What**: after the static debt pass, add optional joins from
-  `check_bio_neuro_substrate.py` outputs into lower-WM/economic consumption
-  rows.
-- **Why now**: the typed surfaces exist; they should become queryable evidence
-  rather than isolated smoke receipts.
+- **What**: retain optional joins from `check_bio_neuro_substrate.py` outputs
+  into lower-WM/Economic consumption rows.
+- **Why now**: the typed surfaces are queryable local evidence now and should
+  stay receipt-shaped rather than drifting back into isolated smoke output.
 - **Unblocks**: future Economic WM value-of-information and anomaly-critic
   training rows.
 - **Verify**: `python3 scripts/economic_world_model/check_bio_neuro_substrate.py --output-dir /tmp/bio_neuro`

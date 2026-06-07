@@ -1,5 +1,36 @@
 # Economic World Model Progress Log
 
+## 2026-06-07 - Deployment economics austerity router
+
+- **Changed**:
+  - added a docs-first 2026-2027 deployment-economics reorientation for CPU-only,
+    deterministic, additive, receipt-producing Economic WM work
+  - added representation-router doctrine stating that real observation,
+    simulation, geometry, generated video, human operator input, and prior replay
+    are complementary evidence sources rather than a fixed hierarchy
+  - added `src/deployment/task_economics.py` and
+    `src/deployment/representation_router.py` with typed dataclasses/enums,
+    deterministic source scoring, source availability/sufficiency gates,
+    rejected-source reasons, blocker summaries, and input/receipt SHAs
+  - added focused deployment-router tests under
+    `tests/deployment/test_representation_router.py`
+- **Why this matters**:
+  - the Economic WM now has a local austerity layer for deciding which evidence
+    source is economically justified before expensive training/provider/hardware
+    loops exist
+  - missing real data, providers, hardware, simulator assets, or generated-video
+    capacity can be represented honestly as unavailable instead of being implied
+    by planning artifacts
+- **Boundary**:
+  - CPU-only deterministic routing and docs only
+  - no training, GPU execution, provider bring-up, Unitree/ROS2/Isaac runtime,
+    hardware execution, promotion, reward/controller mutation, trust-net,
+    `w_econ`, lambda-controller, or Phase-B math change occurred
+- **Verification**:
+  - `python3 -m compileall src/deployment -q`
+  - `python3 -m ruff check src/deployment/representation_router.py src/deployment/task_economics.py tests/deployment/test_representation_router.py`
+  - `python3 -m pytest -q tests/deployment/test_representation_router.py`
+
 ## 2026-06-02 - Process reward package static cleanup
 
 - **Changed**:
@@ -4643,3 +4674,71 @@ Verification for the Phase-5.1 pass:
   only. It does not download data, decode video, execute providers, run GPU,
   train, write weights, operate Unitree hardware, mutate reward/controller
   math, grant Phase 7 authority, or claim promotion.
+
+### 2026-06-07: Unitree event-spine joins in Phase 6.4 transport eval
+
+- Added typed Unitree lower-WM event-spine join receipts for Phase 6.4
+  transport advisory runtime:
+  - `WMTransportUnitreeEventSpineJoin`
+  - `build_wm_transport_unitree_event_spine_joins`
+  - `build_wm_transport_advisory_runtime_with_unitree_event_spine`
+  - `wm_transport_unitree_event_spine_joins_v1.jsonl`
+- The Phase 6.4 runner now detects
+  `artifacts/economic_world_model/cpu_august_gap_execution/event_spine.json`
+  when present and threads the event-spine ref into advisory proposals,
+  transport receipts, decomposed eval reports, the runtime report metadata,
+  and a separate JSONL join receipt.
+- Also fixed a narrow full-`src/` mypy hygiene issue in
+  `src/deployment/representation_router.py` by avoiding reuse of a local
+  payload variable name across incompatible types. Behavior is unchanged.
+- Current local runtime result:
+  - `proposal_count=20`
+  - `receipt_count=20`
+  - `eval_report_count=20`
+  - `joined_shadow_outcome_count=10`
+  - `unitree_event_spine_join_count=20`
+  - `joined_unitree_event_spine_count=20`
+  - `unitree_event_count=11`
+  - `training_executed=false`
+  - `weights_written=false`
+  - `provider_executed=false`
+  - `hardware_executed=false`
+  - `live_policy_control=false`
+  - `reward_math_mutation=false`
+  - `promotion_eligible=false`
+- Verification receipts:
+  - `python3 -m pytest -q tests/test_wm_transport_phase64_runtime_eval.py`: `4 passed`
+  - `python3 -m pytest -q tests/deployment/test_representation_router.py`: `8 passed`
+  - `python3 scripts/economic_world_model/run_phase6_transport_advisory_runtime.py --no-run-dependencies`: pass
+  - focused ruff for the touched transport/script/test surfaces: pass
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary`: pass with
+    existing untyped-body notes only
+  - `python3 -m ruff check . --statistics`: pass
+  - `python3 -m compileall src scripts tests -q`: pass
+  - `git diff --check`: pass
+- Boundary preserved: this is advisory lower-WM label joining only. It does
+  not execute ROS2, SDK2, G1Pilot, Unitree hardware, providers, GPU training,
+  transport training, weight writes, reward/controller mutation, receiver
+  bypass, Phase 7 authority, or promotion.
+
+### 2026-06-07: Deployment-economics representation router
+
+- Added a CPU-only deterministic deployment evidence router under
+  `src/deployment/`:
+  - `TaskEconomics`
+  - `EvidenceSource`
+  - `EvidenceSourceState`
+  - `route_representation_source`
+- The router chooses among real observation, simulation, geometry, generated
+  video, human operator input, prior replay, and unavailable based on task
+  value, uncertainty, failure cost, evidence sufficiency, time, battery, and
+  compute pressure.
+- Added doctrine docs:
+  - `docs/economic_world_model/representation_router_doctrine.md`
+  - `docs/economic_world_model/deployment_economics_reorientation_2026_2027.md`
+- Added tests for high-stakes routing, generated-video rejection, sufficiency
+  floors, prior-replay reuse, geometry/simulation selection, unavailable
+  posture, deterministic tie-breaking, and stable/materially sensitive SHAs.
+- Boundary preserved: the router emits local deterministic receipts only. It
+  does not train, write weights, run providers, execute hardware, mutate
+  reward/controller math, grant authority, or claim promotion.
