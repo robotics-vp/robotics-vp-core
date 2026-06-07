@@ -47,9 +47,9 @@ Observed results:
 After the full-repo static debt burn-down, the current
 local queue from this audit is folded into
 `docs/economic_world_model/wm_subsystem_debt_sweep_2026_06_01.md`. That debt
-sweep now owns the live ordering for remaining local work: keep full-repo
-`mypy src/` and `ruff check .` green, then emit neural trainability audit
-artifacts and keep bounded Phase 7 receipt consumption on existing adapters.
+sweep now owns the live keep-green ordering: keep full-repo `mypy src/`,
+`ruff check .`, and compileall green, then retain bounded Phase 7 receipt
+consumption on existing adapters.
 The provider bring-up readiness ledger is
 materialized locally as template-only, launch-blocked rows; Unitree
 rosbag2/MCAP unavailable receipts are fail-closed locally; and LeRobot
@@ -57,8 +57,14 @@ video/camera receipts now bridge into replay rows plus CPU-safe perception seam
 samples. Unitree event-spine refs now join into Phase 6.4 advisory
 proposal/receipt/eval metadata plus `wm_transport_unitree_event_spine_joins_v1`
 rows, and bio/neuro substrate receipts already join into lower-WM/Economic
-consumption rows. These should stay green as guardrails rather than being
-treated as provider/runtime/stream/video-decoding execution.
+consumption rows. The neural trainability audit now emits component rows plus
+local/Codex/RunPod/hardware follow-up rows for incomplete trainer and backlog
+items. Existing Phase 7 signal adapters now consume these local lower-WM
+receipt families as bounded shadow signals: `source_artifact_count=46`,
+`missing_source_artifact_count=0`, all eight governance nodes signal-backed,
+and all authority gates denied. These should stay green as guardrails rather
+than being treated as provider/runtime/stream/video-decoding/training
+execution.
 Externally blocked provider, GPU, RunPod, ROS2/SDK2, Unitree hardware, and
 promotion-grade proof items remain blockers rather than local implementation
 claims.
@@ -95,7 +101,7 @@ The future training lanes for these surfaces are tracked in
 | Economic WM local scaffold | `scaffold.py`, `resource_surfaces.py`, `phase5_local_prep.py`, `shadow_execution.py`, `lower_wm_maturity_sweep.py`, `regime_broadcast.py` | locally structural; no trained estimator/dynamics/allocator/governance model |
 | Cross-WM transport | `src/world_model/transport/` contracts, rows, topology, uncertainty, neural manifest, advisory runtime | locally structural; no trained bridge/receiver, latency benchmark, or provider/hardware transport evidence |
 | Phase 6.5 meta-node | `src/world_model/humanoid_readiness/phase65.py`, `phase65_trainer.py`, scaffold scripts/tests | locally structural; no trained meta-node weights or heldout robustness proof |
-| Phase 7 meta-regal control | `phase7.py`, `phase7_runtime.py`, `phase7_eval.py`, `phase7_signal_adapters.py`, `phase7_hypernetwork.py` | shadow/advisory scaffold; no authority, no trained composition, no live lower-WM proof |
+| Phase 7 meta-regal control | `phase7.py`, `phase7_runtime.py`, `phase7_eval.py`, `phase7_signal_adapters.py`, `phase7_hypernetwork.py` | bounded lower-WM receipt consumption is locally wired through existing shadow/advisory adapters; no authority, no trained composition, no live lower-WM proof |
 | RunPod execution plane | `scripts/runpod/*`, `src/runpod/launch_profiles.py`, `configs/runpod/examples/*` | manifest-ready; local launch prerequisites still external/config-bound |
 
 ## Still-Unwired Or Externally Blocked Surfaces
@@ -284,16 +290,17 @@ Do not:
 - **Confidence**: high
 - **Blocking**: blocks-downstream
 
-### 5. Emit neural trainability audit
+### 5. Keep neural trainability audit green
 
-- **What**: emit additive JSON/JSONL/doc artifacts over neural, seam, encoder,
-  policy, head, bridge, receiver, and trainer surfaces with follow-up rows and
-  plane routing.
-- **Why now**: with static debt and provider ledger quiet, the repo can separate
-  code gaps from data, provider, GPU, hardware, and benchmark blockers.
+- **What**: retain the additive JSON/JSONL/doc artifacts over neural, seam,
+  encoder, policy, head, bridge, receiver, trainer, script, and backlog
+  surfaces with follow-up rows and plane routing.
+- **Why now**: the audit is the local map from code gaps to data, provider,
+  GPU, hardware, and benchmark blockers, and it should not regress as trainer
+  surfaces change.
 - **Unblocks**: executable August work partitioning across local, Codex,
   RunPod, and hardware planes.
-- **Verify**: audit checker plus static checks.
+- **Verify**: `python3 -m pytest -q tests/test_neural_trainability_audit.py`; `python3 scripts/economic_world_model/compile_neural_trainability_audit.py`
 - **Do NOT**: train, write weights, or mark blocked components promotion
   eligible.
 - **Confidence**: high
@@ -314,12 +321,14 @@ Do not:
 
 ### 7. Keep Phase 7 bounded
 
-- **What**: consume the new lower-WM receipts through existing Phase 7 signal
-  adapters only when receipt joins exist.
-- **Why now**: this preserves the rule that Phase 7 consumes better lower-WM
-  evidence instead of adding abstract vocabulary.
+- **What**: retain the existing Phase 7 signal adapters that consume provider
+  ledger, LeRobot, Unitree event-spine, bio/neuro, and neural trainability
+  receipts as bounded lower-WM labels.
+- **Why now**: the local consumption path is wired; the next risk is
+  regression or accidental overclaiming before live lower-WM/provider/GPU
+  evidence exists.
 - **Unblocks**: later meta-regal composition training with real inputs.
-- **Verify**: `python3 -m pytest -q tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py`
+- **Verify**: `python3 -m pytest -q tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py`; `python3 scripts/economic_world_model/adapt_phase7_governance_node_signals.py --no-run-dependencies`
 - **Do NOT**: grant authority or add new Phase 7 abstractions just because
   typed bio/neuro surfaces now exist.
 - **Confidence**: high

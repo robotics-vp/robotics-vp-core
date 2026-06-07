@@ -132,15 +132,13 @@ def _camera_calibration_class(video_ref: Dict[str, Any]) -> str:
     cameras = [str(camera) for camera in list(sensor_bundle.get("cameras", []) or [])]
     if not cameras:
         return "camera_missing"
-    intrinsics = (
-        sensor_bundle.get("intrinsics")
-        if isinstance(sensor_bundle.get("intrinsics"), dict)
-        else {}
+    raw_intrinsics = sensor_bundle.get("intrinsics")
+    raw_extrinsics = sensor_bundle.get("extrinsics")
+    intrinsics: Dict[str, Any] = (
+        dict(raw_intrinsics) if isinstance(raw_intrinsics, dict) else {}
     )
-    extrinsics = (
-        sensor_bundle.get("extrinsics")
-        if isinstance(sensor_bundle.get("extrinsics"), dict)
-        else {}
+    extrinsics: Dict[str, Any] = (
+        dict(raw_extrinsics) if isinstance(raw_extrinsics, dict) else {}
     )
     calibrated = sum(
         1 for camera in cameras if intrinsics.get(camera) and extrinsics.get(camera)
@@ -928,11 +926,11 @@ def _write_canonical_lower_wm_sidecars(
 
     lower_wm_dir = sidecar_dir / "canonical_lower_wm" / episode_id
     lower_wm_dir.mkdir(parents=True, exist_ok=True)
-    benchmark_payload = (
-        benchmark_gate.to_dict()
-        if hasattr(benchmark_gate, "to_dict")
-        else dict(benchmark_gate or {})
-    )
+    benchmark_payload: Dict[str, Any]
+    if benchmark_gate is not None and hasattr(benchmark_gate, "to_dict"):
+        benchmark_payload = benchmark_gate.to_dict()
+    else:
+        benchmark_payload = dict(benchmark_gate or {})
     benchmark_ready = bool(benchmark_payload.get("ready", False))
     metadata = _metadata_dict(video_ref)
 
@@ -2149,9 +2147,9 @@ def run_stage1_pipeline(
     tier_counts = {0: 0, 1: 0, 2: 0}
     avg_trust = 0.0
     avg_novelty = 0.0
-    augmentation_types = {}
-    routing_sources = {}
-    diffusion_backends = {}
+    augmentation_types: Dict[str, int] = {}
+    routing_sources: Dict[str, int] = {}
+    diffusion_backends: Dict[str, int] = {}
 
     completed_entries = [entry for entry in pipeline_log if not entry.get("blocked")]
     for entry in completed_entries:

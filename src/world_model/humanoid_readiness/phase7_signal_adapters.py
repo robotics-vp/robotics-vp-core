@@ -470,6 +470,19 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
             "phase6_transport_advisory_runtime/"
             "wm_transport_advisory_runtime_report_v1.json"
         ),
+        "provider_bringup_ledger_report": (
+            "provider_bringup_readiness_ledger/provider_bringup_ledger_report_v1.json"
+        ),
+        "lerobot_video_receipt_bridge_report": (
+            "lerobot_video_replay_perception_receipts/"
+            "lerobot_video_receipt_bridge_report_v1.json"
+        ),
+        "bio_neuro_receipt_join_report": (
+            "bio_neuro_substrate/bio_neuro_receipt_join_report_v1.json"
+        ),
+        "neural_trainability_audit_report": (
+            "neural_trainability_audit/neural_trainability_audit_report_v1.json"
+        ),
         "phase6_closure_audit": (
             "phase6_transport_closure_audit/wm_transport_phase6_closure_audit_v1.json"
         ),
@@ -550,6 +563,28 @@ def _load_lower_wm_evidence(root: Path) -> _EvidenceBundle:
         "phase6_transport_eval_reports": (
             "phase6_transport_advisory_runtime/"
             "wm_transport_decomposed_eval_reports_v1.jsonl"
+        ),
+        "phase6_unitree_event_spine_joins": (
+            "phase6_transport_advisory_runtime/"
+            "wm_transport_unitree_event_spine_joins_v1.jsonl"
+        ),
+        "provider_bringup_ledger_entries": (
+            "provider_bringup_readiness_ledger/provider_bringup_ledger_entries_v1.jsonl"
+        ),
+        "lerobot_video_receipt_rows": (
+            "lerobot_video_replay_perception_receipts/lerobot_video_receipt_rows.jsonl"
+        ),
+        "lerobot_replay_steps": (
+            "lerobot_video_replay_perception_receipts/replay_steps.jsonl"
+        ),
+        "bio_neuro_receipt_join_rows": (
+            "bio_neuro_substrate/bio_neuro_receipt_join_rows_v1.jsonl"
+        ),
+        "neural_trainability_components": (
+            "neural_trainability_audit/neural_trainability_components_v1.jsonl"
+        ),
+        "neural_trainability_followups": (
+            "neural_trainability_audit/neural_trainability_followups_v1.jsonl"
         ),
         "phase65_meta_node_trajectory_receipts": (
             "phase65_meta_node_neuralization/meta_node_trajectory_receipts_v1.jsonl"
@@ -687,20 +722,35 @@ def _node_evidence(
             "phase6_advisory_runtime_report",
             "phase6_closure_audit",
             "phase6_transport_eval_reports",
+            "provider_bringup_ledger_report",
+            "neural_trainability_audit_report",
+            "neural_trainability_followups",
         ]
         summary = p["phase7_shadow_summary"]
         advisory = p["phase6_advisory_runtime_report"]
         closure = p["phase6_closure_audit"]
+        provider = p["provider_bringup_ledger_report"]
+        trainability = p["neural_trainability_audit_report"]
         metrics = {
             "mean_net_customer_rate": _number(summary, "mean_net_customer_rate"),
             "total_data_share_credit": _number(summary, "total_data_share_credit"),
             "transport_eval_report_count": _number(advisory, "eval_report_count"),
+            "provider_bringup_ready_count": _number(
+                provider, "provider_bringup_ready_count"
+            ),
+            "trainability_followup_count": _number(trainability, "followup_count"),
+            "trainability_ready_for_training_count": _number(
+                trainability, "ready_for_training_count"
+            ),
             "phase6_training_denied": float(not bool(closure.get("training_executed"))),
         }
         slots = {
             "allocation_signal": "shadow_econ_tensor_and_transport_quality",
             "budget_evidence": _first_id(advisory),
             "opportunity_cost_join": "phase7_shadow_runtime_summary",
+            "provider_bringup_ledger_ref": _first_id(provider),
+            "trainability_audit_ref": _first_id(trainability),
+            "training_dispatch": "denied",
         }
     elif node_key == "reward_integrity_governance":
         families = [
@@ -708,22 +758,32 @@ def _node_evidence(
             "phase7_control_field_evals",
             "phase7_outcome_join_rows",
             "phase6_advisory_runtime_report",
+            "bio_neuro_receipt_join_report",
+            "bio_neuro_receipt_join_rows",
         ]
         summary = p["phase7_shadow_summary"]
         eval_report = p["phase7_eval_report"]
+        bio_neuro = p["bio_neuro_receipt_join_report"]
         metrics = {
             "mean_reward_total": _number(summary, "mean_reward_total"),
             "control_field_eval_count": _number(
                 eval_report, "control_field_eval_count"
             ),
+            "bio_neuro_receipt_join_row_count": float(
+                len(r["bio_neuro_receipt_join_rows"])
+            ),
             "reward_mutation_denied": float(
                 not bool(eval_report.get("reward_math_mutation"))
             ),
             "promotion_denied": float(not bool(eval_report.get("promotion_eligible"))),
+            "bio_neuro_promotion_denied": float(
+                not bool(bio_neuro.get("promotion_eligible"))
+            ),
         }
         slots = {
             "reward_integrity_signal": "reward_mutation_denied_with_outcome_slots",
             "exploit_suspicion_status": "awaiting_labeled_reward_hack_corpus",
+            "bio_neuro_receipt_join_ref": _first_id(bio_neuro),
             "reward_math_mutation": False,
         }
     elif node_key == "plausibility_geometry_governance":
@@ -762,16 +822,28 @@ def _node_evidence(
             "phase4_blocker_probe_report",
             "phase4_ros2_readiness_receipts",
             "phase4_blocker_probe_receipts",
+            "provider_bringup_ledger_report",
+            "provider_bringup_ledger_entries",
+            "phase6_unitree_event_spine_joins",
+            "neural_trainability_audit_report",
         ]
         bringup = p["phase4_bringup_readiness_report"]
         runtime = p["phase4_runtime_bridge_report"]
         blocker = p["phase4_blocker_probe_report"]
+        provider = p["provider_bringup_ledger_report"]
+        trainability = p["neural_trainability_audit_report"]
         metrics = {
             "dependency_verified_count": _number(bringup, "dependency_verified_count"),
             "ros2_runtime_readiness_receipt_count": _number(
                 runtime, "ros2_runtime_readiness_receipt_count"
             ),
             "succeeded_probe_count": _number(blocker, "succeeded_probe_count"),
+            "provider_launch_allowed_count": _number(provider, "launch_allowed_count"),
+            "runpod_template_count": _number(provider, "runpod_template_count"),
+            "unitree_event_spine_join_row_count": float(
+                len(r["phase6_unitree_event_spine_joins"])
+            ),
+            "neural_audit_component_count": _number(trainability, "component_count"),
             "hardware_evidence_present": float(bool(runtime.get("hardware_executed"))),
             "live_stream_observed": float(bool(runtime.get("live_stream_observed"))),
         }
@@ -780,6 +852,11 @@ def _node_evidence(
             "provider_truth": False,
             "hardware_runtime_evidence": False,
             "runtime_readiness_hint": "local_preflight_ready_live_runtime_missing",
+            "provider_bringup_ledger_ref": _first_id(provider),
+            "unitree_event_spine_join_ref": _first_row_id(
+                r["phase6_unitree_event_spine_joins"]
+            ),
+            "trainability_audit_ref": _first_id(trainability),
         }
     elif node_key == "safety_constraint_governance":
         families = [
@@ -818,11 +895,18 @@ def _node_evidence(
             "phase7_shadow_summary",
             "phase6_advisory_runtime_report",
             "phase6_transport_eval_reports",
+            "phase6_unitree_event_spine_joins",
             "phase7_outcome_join_rows",
             "phase65_meta_node_trajectory_receipts",
+            "lerobot_video_receipt_bridge_report",
+            "lerobot_video_receipt_rows",
+            "lerobot_replay_steps",
+            "bio_neuro_receipt_join_rows",
+            "neural_trainability_components",
         ]
         summary = p["phase7_shadow_summary"]
         advisory = p["phase6_advisory_runtime_report"]
+        lerobot = p["lerobot_video_receipt_bridge_report"]
         metrics = {
             "total_data_share_credit": _number(summary, "total_data_share_credit"),
             "joined_shadow_outcome_count": _number(
@@ -830,10 +914,28 @@ def _node_evidence(
             ),
             "shadow_join_slot_count": _number(advisory, "shadow_join_slot_count"),
             "outcome_join_row_count": float(len(r["phase7_outcome_join_rows"])),
+            "unitree_event_spine_join_row_count": float(
+                len(r["phase6_unitree_event_spine_joins"])
+            ),
+            "lerobot_video_receipt_count": _number(lerobot, "video_receipt_count"),
+            "lerobot_replay_step_count": float(len(r["lerobot_replay_steps"])),
+            "bio_neuro_receipt_join_row_count": float(
+                len(r["bio_neuro_receipt_join_rows"])
+            ),
+            "trainability_component_count": float(
+                len(r["neural_trainability_components"])
+            ),
         }
         slots = {
             "data_value_signal": "datapack_credit_transport_eval_outcome_join",
             "collection_priority": "awaiting_counterfactual_value_label",
+            "lerobot_video_receipt_ref": _first_id(lerobot),
+            "unitree_event_spine_join_ref": _first_row_id(
+                r["phase6_unitree_event_spine_joins"]
+            ),
+            "bio_neuro_receipt_join_ref": _first_row_id(
+                r["bio_neuro_receipt_join_rows"]
+            ),
             "training_dispatch": "denied",
         }
     elif node_key == "embodiment_limit_governance":
@@ -843,6 +945,7 @@ def _node_evidence(
             "phase35_joint_vector_receipts",
             "phase4_downstream_controller_report",
             "phase4_low_level_command_frames",
+            "phase6_unitree_event_spine_joins",
         ]
         refit = p["phase35_refit_report"]
         audit = p["phase35_bipedal_readiness_audit"]
@@ -858,12 +961,18 @@ def _node_evidence(
                 audit, "whole_body_replay_row_count"
             ),
             "command_frame_count": _number(downstream, "command_frame_count"),
+            "unitree_event_spine_join_row_count": float(
+                len(r["phase6_unitree_event_spine_joins"])
+            ),
         }
         slots = {
             "embodiment_signal": "canonical_bipedal_joint_frame_capacity_receipts",
             "primary_posture": "bipedal_whole_body",
             "fallback_posture": "stable_base_mobile_manipulator",
             "fixed_base_tabletop": "curriculum_regression_only",
+            "unitree_event_spine_join_ref": _first_row_id(
+                r["phase6_unitree_event_spine_joins"]
+            ),
         }
     elif node_key == "coordination_operator_governance":
         families = [
@@ -928,6 +1037,10 @@ def _payload_ids(payload: Mapping[str, Any]) -> list[str]:
         "eval_report_id",
         "contract_id",
         "node_id",
+        "join_id",
+        "ledger_entry_id",
+        "component_id",
+        "missing_item_id",
     ):
         value = payload.get(key)
         if value not in (None, ""):

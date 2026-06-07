@@ -72,9 +72,7 @@ def _fake_closure_audit(closure_dir: Path) -> Path:
         all_local_structures_complete=True,
         ready_for_phase7_scaffold=True,
         closed_local_surfaces=["phase65_meta_node_state"],
-        remaining_evidence_blockers=[
-            "gpu_training_provider_hardware_evidence_missing"
-        ],
+        remaining_evidence_blockers=["gpu_training_provider_hardware_evidence_missing"],
     )
     path = closure_dir / "phase35_4_65_local_closure_audit_v1.json"
     save_phase35465_local_closure_audit(path, audit)
@@ -236,6 +234,62 @@ def _write_lower_wm_signal_fixture(root: Path) -> None:
             "promotion_eligible": False,
         },
     )
+    write_json(
+        root
+        / "provider_bringup_readiness_ledger"
+        / "provider_bringup_ledger_report_v1.json",
+        {
+            "report_id": "provider_bringup_ledger_test",
+            "status": "ok_provider_bringup_ledger_non_launching",
+            "entry_count": 2,
+            "provider_bringup_ready_count": 0,
+            "launch_allowed_count": 0,
+            "runpod_template_count": 7,
+            "provider_executed": False,
+            "runpod_launched": False,
+            "training_executed": False,
+            "hardware_executed": False,
+            "promotion_eligible": False,
+        },
+    )
+    write_json(
+        root
+        / "lerobot_video_replay_perception_receipts"
+        / "lerobot_video_receipt_bridge_report_v1.json",
+        {
+            "report_id": "lerobot_video_receipt_bridge_test",
+            "status": "ok_lerobot_video_receipts_non_training",
+            "video_receipt_count": 1,
+            "replay_step_count": 3,
+            "evidence_fusion_sample_count": 3,
+            "provider_executed": False,
+            "gpu_training_executed": False,
+            "promotion_eligible": False,
+        },
+    )
+    write_json(
+        root / "bio_neuro_substrate" / "bio_neuro_receipt_join_report_v1.json",
+        {
+            "join_id": "bio_neuro_receipt_join_test",
+            "status": "ok_bio_neuro_receipts_joined",
+            "row_count": 14,
+            "promotion_eligible": False,
+            "phase7_abstraction_expanded": False,
+        },
+    )
+    write_json(
+        root / "neural_trainability_audit" / "neural_trainability_audit_report_v1.json",
+        {
+            "audit_id": "neural_trainability_audit_test",
+            "status": "ok_neural_trainability_audit_non_training",
+            "component_count": 21,
+            "followup_count": 27,
+            "ready_for_training_count": 0,
+            "promotion_eligible_count": 0,
+            "promotion_eligible": False,
+            "phase7_authority_granted": False,
+        },
+    )
     jsonl_paths = [
         "phase35_bipedal_readiness_audit/balance_geometry_reports_v1.jsonl",
         "phase35_bipedal_readiness_audit/joint_vector_validation_receipts_v1.jsonl",
@@ -264,8 +318,86 @@ def _write_lower_wm_signal_fixture(root: Path) -> None:
     for index, relative in enumerate(jsonl_paths):
         write_jsonl(
             root / relative,
-            [{"receipt_id": f"fixture_receipt_{index}", "report_id": f"fixture_report_{index}"}],
+            [
+                {
+                    "receipt_id": f"fixture_receipt_{index}",
+                    "report_id": f"fixture_report_{index}",
+                }
+            ],
         )
+    write_jsonl(
+        root
+        / "phase6_transport_advisory_runtime"
+        / "wm_transport_unitree_event_spine_joins_v1.jsonl",
+        [
+            {
+                "join_id": "unitree_event_spine_join_test",
+                "event_count": 4,
+                "promotion_eligible": False,
+                "hardware_executed": False,
+            }
+        ],
+    )
+    write_jsonl(
+        root
+        / "provider_bringup_readiness_ledger"
+        / "provider_bringup_ledger_entries_v1.jsonl",
+        [
+            {
+                "ledger_entry_id": "provider_ledger_entry_test",
+                "launch_allowed": False,
+                "provider_executed": False,
+            }
+        ],
+    )
+    write_jsonl(
+        root
+        / "lerobot_video_replay_perception_receipts"
+        / "lerobot_video_receipt_rows.jsonl",
+        [
+            {
+                "receipt_id": "lerobot_video_receipt_test",
+                "video_receipt_id": "video_receipt_test",
+                "promotion_eligible": False,
+            }
+        ],
+    )
+    write_jsonl(
+        root / "lerobot_video_replay_perception_receipts" / "replay_steps.jsonl",
+        [
+            {"row_id": "lerobot_replay_step_0", "step_index": 0},
+            {"row_id": "lerobot_replay_step_1", "step_index": 1},
+            {"row_id": "lerobot_replay_step_2", "step_index": 2},
+        ],
+    )
+    write_jsonl(
+        root / "bio_neuro_substrate" / "bio_neuro_receipt_join_rows_v1.jsonl",
+        [
+            {
+                "row_id": "bio_neuro_join_row_test",
+                "receipt_id": "bio_neuro_receipt_test",
+                "promotion_eligible": False,
+            }
+        ],
+    )
+    write_jsonl(
+        root / "neural_trainability_audit" / "neural_trainability_components_v1.jsonl",
+        [
+            {
+                "component_id": "trainability_component_test",
+                "promotion_eligible": False,
+            }
+        ],
+    )
+    write_jsonl(
+        root / "neural_trainability_audit" / "neural_trainability_followups_v1.jsonl",
+        [
+            {
+                "missing_item_id": "trainability_followup_test",
+                "promotion_eligible": False,
+            }
+        ],
+    )
     write_jsonl(
         root
         / "phase7_meta_regal_shadow_runtime"
@@ -312,6 +444,7 @@ def test_phase7_signal_adapters_feed_runtime_from_lower_wm_receipts(tmp_path):
     assert payload["signal_receipt_count"] == len(EXPECTED_PHASE7_GOVERNANCE_NODE_KEYS)
     assert payload["all_eight_nodes_signal_backed"] is True
     assert payload["shadow_runtime_feed_ready"] is True
+    assert payload["source_artifact_count"] >= 46
     assert payload["missing_source_artifact_count"] == 0
     assert payload["phase7_authority_granted"] is False
     assert payload["live_dispatch_allowed"] is False
@@ -329,6 +462,26 @@ def test_phase7_signal_adapters_feed_runtime_from_lower_wm_receipts(tmp_path):
     assert all(receipt.lower_wm_receipt_backed for receipt in receipts)
     assert all(receipt.shadow_only for receipt in receipts)
     assert all(not receipt.live_dispatch_allowed for receipt in receipts)
+    receipt_by_node = {receipt.node_key: receipt for receipt in receipts}
+    deployment_refs = receipt_by_node[
+        "deployment_truth_governance"
+    ].source_artifact_refs
+    assert "provider_bringup_ledger_report" in deployment_refs
+    assert "phase6_unitree_event_spine_joins" in deployment_refs
+    assert "neural_trainability_audit_report" in deployment_refs
+
+    data_refs = receipt_by_node["data_value_governance"].source_artifact_refs
+    assert "lerobot_video_receipt_bridge_report" in data_refs
+    assert "bio_neuro_receipt_join_rows" in data_refs
+    assert "neural_trainability_components" in data_refs
+
+    reward_refs = receipt_by_node["reward_integrity_governance"].source_artifact_refs
+    assert "bio_neuro_receipt_join_rows" in reward_refs
+
+    embodiment_refs = receipt_by_node[
+        "embodiment_limit_governance"
+    ].source_artifact_refs
+    assert "phase6_unitree_event_spine_joins" in embodiment_refs
 
     runtime_payload = run_wire_phase7_meta_regal_runtime_shadow(
         output_dir=runtime_dir,
@@ -367,8 +520,10 @@ def test_phase7_signal_adapters_feed_runtime_from_lower_wm_receipts(tmp_path):
     )
     assert eval_payload["status"] == "ok"
     field_evals = (
-        eval_dir / "phase7_control_field_eval_reports_v1.jsonl"
-    ).read_text().splitlines()
+        (eval_dir / "phase7_control_field_eval_reports_v1.jsonl")
+        .read_text()
+        .splitlines()
+    )
     assert field_evals
     assert all(
         json.loads(line)["metrics"]["lower_wm_signal_backed"] == 1.0

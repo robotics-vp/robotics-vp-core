@@ -4742,3 +4742,92 @@ Verification for the Phase-5.1 pass:
 - Boundary preserved: the router emits local deterministic receipts only. It
   does not train, write weights, run providers, execute hardware, mutate
   reward/controller math, grant authority, or claim promotion.
+
+### 2026-06-07: Neural trainability audit
+
+- Added a typed non-training trainability audit:
+  - `src/world_model/economic_world_model/neural_trainability_audit.py`
+  - `scripts/economic_world_model/compile_neural_trainability_audit.py`
+  - `tests/test_neural_trainability_audit.py`
+  - `docs/economic_world_model/neural_trainability_audit.md`
+- The audit emits component rows over neural, seam, encoder, policy, head,
+  bridge, receiver, trainer, training-script, and backlog surfaces, then emits
+  executable follow-up rows by plane:
+  - `local`
+  - `codex`
+  - `runpod_provider`
+  - `runpod_train`
+  - `hardware_runtime`
+- Current compiler result:
+  - `component_count=21`
+  - `followup_count=27`
+  - `ready_for_training_count=0`
+  - `promotion_eligible_count=0`
+  - `local_static_ready_count=20`
+  - `validation.status=ok`
+  - `validation.error_count=0`
+  - `validation.safe_for_training=false`
+  - `validation.safe_for_promotion=false`
+  - `plane_counts.local=0`
+  - `plane_counts.codex=8`
+  - `plane_counts.runpod_provider=5`
+  - `plane_counts.runpod_train=11`
+  - `plane_counts.hardware_runtime=3`
+- Verification receipts:
+  - `python3 -m pytest -q tests/test_neural_trainability_audit.py`: `3 passed`
+  - `python3 scripts/economic_world_model/compile_neural_trainability_audit.py`: pass
+  - focused ruff/mypy for the new audit module/script/test: pass
+- Boundary preserved: this is a local planning and receipt audit only. It does
+  not train, write weights, run providers, execute GPU, launch RunPod, operate
+  hardware, mutate reward/controller math, grant Phase 7 authority, or claim
+  promotion.
+
+### 2026-06-07: Bounded Phase 7 receipt consumption
+
+- Extended the existing Phase 7 governance signal adapters so they consume the
+  newly wired lower-WM receipt families:
+  - provider bring-up readiness ledger report and rows
+  - LeRobot video/replay/perception receipt bridge report and rows
+  - Unitree Phase 6.4 event-spine join rows
+  - bio/neuro receipt join report and rows
+  - neural trainability audit report, component rows, and follow-up rows
+- Also tightened a narrow mypy hygiene issue in
+  `scripts/run_stage1_pipeline.py` by making camera-calibration dictionaries,
+  optional benchmark payload handling, and summary count dictionaries explicit.
+  Behavior is unchanged.
+- Current adapter result:
+  - `adapter_count=8`
+  - `signal_receipt_count=8`
+  - `source_artifact_count=46`
+  - `missing_source_artifact_count=0`
+  - `lower_wm_receipt_backed_node_count=8`
+  - `all_eight_nodes_signal_backed=true`
+  - `shadow_runtime_feed_ready=true`
+  - `phase7_authority_granted=false`
+  - `live_dispatch_allowed=false`
+  - `hard_veto_dispatch=false`
+  - `training_executed=false`
+  - `weights_written=false`
+  - `provider_executed=false`
+  - `hardware_executed=false`
+  - `unitree_sim_runtime_executed=false`
+  - `live_policy_control=false`
+  - `reward_math_mutation=false`
+  - `promotion_eligible=false`
+- Verification receipts:
+  - `python3 -m pytest -q tests/test_neural_trainability_audit.py tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py`: `5 passed`
+  - `python3 scripts/economic_world_model/compile_neural_trainability_audit.py`: pass
+  - `python3 scripts/economic_world_model/adapt_phase7_governance_node_signals.py --no-run-dependencies`: pass
+  - focused mypy for the audit, Phase 7 adapter, and compiler/adapter scripts:
+    pass with existing untyped-body notes only
+  - `python3 -m mypy src/ --show-error-codes --no-error-summary`: pass with
+    existing untyped-body notes only
+  - `python3 -m ruff check . --statistics`: pass
+  - `python3 -m compileall src scripts tests -q`: pass
+  - `git diff --check`: pass
+  - `python3 -m pytest tests/ -q`: `1779 passed, 2 skipped, 32 warnings`
+- Boundary preserved: this is bounded lower-WM receipt consumption through
+  existing shadow adapters only. It does not add Phase 7 abstraction
+  vocabulary, train, write weights, execute providers, execute hardware, run
+  Unitree sim, dispatch actions, mutate reward/controller math, grant
+  authority, or claim promotion.

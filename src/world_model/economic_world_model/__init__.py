@@ -89,6 +89,17 @@ from src.world_model.economic_world_model.neural_architecture_manifest import (
     load_economic_wm_neural_architecture_manifest,
     save_economic_wm_neural_architecture_manifest,
 )
+from src.world_model.economic_world_model.neural_trainability_audit import (
+    NeuralTrainabilityAuditReport,
+    NeuralTrainabilityComponent,
+    NeuralTrainabilityFollowupRow,
+    build_neural_trainability_audit,
+    load_neural_trainability_audit_report,
+    load_neural_trainability_components,
+    load_neural_trainability_followups,
+    save_neural_trainability_audit,
+    validate_neural_trainability_audit,
+)
 
 from src.world_model.economic_world_model.phase5_local_prep import (
     EconomicWMCounterfactualValueJoinRow,
@@ -291,6 +302,9 @@ __all__ = [
     "EconomicWMShadowOutcomeReceipt",
     "EconomicWMNeuralArchitectureManifest",
     "EconomicWMNeuralComponentSpec",
+    "NeuralTrainabilityAuditReport",
+    "NeuralTrainabilityComponent",
+    "NeuralTrainabilityFollowupRow",
     "RegimeAcknowledgmentReceipt",
     "RegimeBroadcast",
     "build_bio_neuro_receipt_join",
@@ -308,6 +322,12 @@ __all__ = [
     "build_economic_wm_neural_architecture_manifest_from_path",
     "load_economic_wm_neural_architecture_manifest",
     "save_economic_wm_neural_architecture_manifest",
+    "build_neural_trainability_audit",
+    "load_neural_trainability_audit_report",
+    "load_neural_trainability_components",
+    "load_neural_trainability_followups",
+    "save_neural_trainability_audit",
+    "validate_neural_trainability_audit",
     "build_benchmark_gate_specs",
     "build_corpus_prep_artifact_plans",
     "build_evidence_hygiene_specs",

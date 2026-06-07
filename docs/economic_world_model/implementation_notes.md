@@ -7423,3 +7423,120 @@ Broad ruff and compileall: pass.
 This is deterministic CPU-only evidence-source routing for deployment
 economics. It does not run providers, run GPU, train, write weights, execute
 hardware, mutate reward/controller math, grant authority, or claim promotion.
+
+## 2026-06-07 — Neural trainability audit
+
+### What changed
+
+- Added `src/world_model/economic_world_model/neural_trainability_audit.py`
+  with typed component rows, executable follow-up rows, a top-level report,
+  validation, and save/load helpers.
+- Added
+  `scripts/economic_world_model/compile_neural_trainability_audit.py` to emit:
+  - `neural_trainability_audit_report_v1.json`
+  - `neural_trainability_components_v1.jsonl`
+  - `neural_trainability_followups_v1.jsonl`
+  - `neural_trainability_audit_v1.md`
+  - `neural_trainability_audit_validation_v1.json`
+- Added `tests/test_neural_trainability_audit.py`.
+- Added tracked documentation at
+  `docs/economic_world_model/neural_trainability_audit.md`.
+- Exported the audit helpers from `src/world_model/economic_world_model`.
+
+### Current receipts
+
+```bash
+python3 -m pytest -q tests/test_neural_trainability_audit.py
+python3 scripts/economic_world_model/compile_neural_trainability_audit.py
+python3 -m mypy src/world_model/economic_world_model/neural_trainability_audit.py scripts/economic_world_model/compile_neural_trainability_audit.py --show-error-codes --no-error-summary
+python3 -m ruff check src/world_model/economic_world_model/neural_trainability_audit.py scripts/economic_world_model/compile_neural_trainability_audit.py tests/test_neural_trainability_audit.py src/world_model/economic_world_model/__init__.py
+```
+
+Focused pytest result: `3 passed`.
+
+The compiler emitted:
+
+- `component_count=21`
+- `followup_count=27`
+- `ready_for_training_count=0`
+- `promotion_eligible_count=0`
+- `local_static_ready_count=20`
+- `validation.status=ok`
+- `validation.error_count=0`
+- `validation.safe_for_training=false`
+- `validation.safe_for_promotion=false`
+- `plane_counts.local=0`
+- `plane_counts.codex=8`
+- `plane_counts.runpod_provider=5`
+- `plane_counts.runpod_train=11`
+- `plane_counts.hardware_runtime=3`
+
+### Boundary
+
+This is a non-training trainability audit only. It does not run providers,
+run GPU, launch RunPod, train, write weights, execute hardware, mutate
+reward/controller math, grant Phase 7 authority, or claim promotion.
+
+## 2026-06-07 — Bounded Phase 7 receipt consumption
+
+### What changed
+
+- Extended `src/world_model/humanoid_readiness/phase7_signal_adapters.py` so
+  existing governance-node signal adapters consume:
+  - provider bring-up ledger reports and entries
+  - LeRobot video receipt, replay, and perception bridge artifacts
+  - Unitree Phase 6.4 event-spine join rows
+  - bio/neuro receipt join artifacts
+  - neural trainability audit reports, component rows, and follow-up rows
+- Added focused assertions in `tests/test_humanoid_phase7_signal_adapters.py`
+  that deployment, data-value, reward-integrity, and embodiment-limit signals
+  include those new lower-WM receipt families.
+- Tightened `scripts/run_stage1_pipeline.py` type narrowing for camera
+  calibration dictionaries, optional benchmark payloads, and summary counters
+  after focused mypy pulled the script through imports.
+
+### Current receipts
+
+```bash
+python3 -m pytest -q tests/test_neural_trainability_audit.py tests/test_humanoid_phase7_signal_adapters.py tests/test_humanoid_phase7_shadow_runtime_wiring.py
+python3 scripts/economic_world_model/compile_neural_trainability_audit.py
+python3 scripts/economic_world_model/adapt_phase7_governance_node_signals.py --no-run-dependencies
+python3 -m mypy src/ --show-error-codes --no-error-summary
+python3 -m ruff check . --statistics
+python3 -m compileall src scripts tests -q
+git diff --check
+python3 -m pytest tests/ -q
+```
+
+Focused pytest result: `5 passed`.
+Full pytest result: `1779 passed, 2 skipped, 32 warnings`.
+Broad static result: full `src/` mypy passed with existing untyped-body notes
+only; full ruff, compileall, and diff whitespace checks passed.
+
+The Phase 7 adapter emitted:
+
+- `adapter_count=8`
+- `signal_receipt_count=8`
+- `source_artifact_count=46`
+- `missing_source_artifact_count=0`
+- `lower_wm_receipt_backed_node_count=8`
+- `all_eight_nodes_signal_backed=true`
+- `shadow_runtime_feed_ready=true`
+- `phase7_authority_granted=false`
+- `live_dispatch_allowed=false`
+- `hard_veto_dispatch=false`
+- `training_executed=false`
+- `weights_written=false`
+- `provider_executed=false`
+- `hardware_executed=false`
+- `unitree_sim_runtime_executed=false`
+- `live_policy_control=false`
+- `reward_math_mutation=false`
+- `promotion_eligible=false`
+
+### Boundary
+
+This is bounded lower-WM receipt consumption through existing shadow adapters
+only. It does not expand Phase 7 abstractions, train, write weights, execute
+providers, execute hardware, run Unitree sim, dispatch actions, mutate
+reward/controller math, grant authority, or claim promotion.
