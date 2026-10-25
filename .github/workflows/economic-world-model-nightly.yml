@@ -27,6 +27,7 @@ jobs:
       summary_digest: ${{ steps.collect.outputs.summary_digest }}
       execute_now: ${{ steps.collect.outputs.execute_now }}
       next_task_title: ${{ steps.collect.outputs.next_task_title }}
+      codex_configured: ${{ steps.collect.outputs.codex_configured }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +50,8 @@ jobs:
 
       - name: Collect outputs
         id: collect
+        env:
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
         run: |
           python3 - <<'PY'
           import json
@@ -61,6 +64,7 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
               handle.write(f"summary_digest={data['summary_digest']}\n")
               handle.write(f"execute_now={'true' if data['next_task'].get('execute_now') else 'false'}\n")
+              handle.write(f"codex_configured={'true' if os.environ.get('CODEX_API_KEY') else 'false'}\n")
               handle.write("next_task_title<<EOF\n")
               handle.write(f"{data['next_task'].get('title', '')}\n")
               handle.write("EOF\n")
@@ -83,7 +87,7 @@ jobs:
 
   codex_execute:
     needs: audit
-    if: ${{ needs.audit.outputs.execute_now == 'true' && secrets.CODEX_API_KEY != '' && (github.event_name == 'schedule' || inputs.run_codex) }}
+    if: ${{ needs.audit.outputs.execute_now == 'true' && needs.audit.outputs.codex_configured == 'true' && (github.event_name == 'schedule' || inputs.run_codex) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
@@ -34,6 +35,10 @@ PROVIDER_TRUTH_HELPER_TOKENS = (
     "build_teacher_provider_truth",
     "build_scene_tracks_provider_truth",
 )
+
+# Match payload names such as provider_truth and scene_tracks_provider_truth,
+# not descriptive metadata such as provider_truth_class or provider_truth_owner.
+PROVIDER_TRUTH_PAYLOAD_TOKEN = re.compile(r"\b\w*provider_truth\b")
 
 
 def iter_python_files(repo_root: Path, relative_dirs: Sequence[str]) -> Iterable[Path]:
@@ -66,7 +71,7 @@ def find_provider_truth_issues(repo_root: Path, relative_dirs: Sequence[str] = R
     issues: List[Dict[str, str]] = []
     for path in iter_python_files(repo_root, relative_dirs):
         content = path.read_text(encoding="utf-8")
-        if "provider_truth" not in content:
+        if not PROVIDER_TRUTH_PAYLOAD_TOKEN.search(content):
             continue
         if "tests/" in str(path):
             continue

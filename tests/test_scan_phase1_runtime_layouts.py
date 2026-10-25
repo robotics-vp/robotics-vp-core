@@ -3,10 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.scan_phase1_runtime_layouts import main as scan_runtime_layouts_main
 
 
-def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path: Path) -> None:
+@pytest.mark.parametrize("materialize_robot_assets", [True, False])
+def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(
+    tmp_path: Path,
+    materialize_robot_assets: bool,
+) -> None:
     unitree_sim_root = tmp_path / "unitree_sim_isaaclab"
     unitree_sim_root.mkdir()
     (unitree_sim_root / "sim_main.py").write_text("", encoding="utf-8")
@@ -18,6 +24,12 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     asset_root = tmp_path / "assets"
     asset_root.mkdir()
     (asset_root / "g1.usd").write_text("x", encoding="utf-8")
+    if materialize_robot_assets:
+        (asset_root / "g1.urdf").write_text('<robot name="g1"/>', encoding="utf-8")
+        (asset_root / "joint_map.yaml").write_text("joints: [joint_0]\n", encoding="utf-8")
+        (asset_root / "joint_limits.yaml").write_text(
+            "joint_0: {lower: -1.0, upper: 1.0}\n", encoding="utf-8"
+        )
     policy_root = tmp_path / "policies"
     policy_root.mkdir()
     (policy_root / "g1_policy.onnx").write_text("x", encoding="utf-8")
@@ -47,14 +59,14 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
                 "retargeting_root": str(retargeting_root),
                 "motion_clip_paths": [str(motion_root / "g1_walk.npz")],
                 "robot_asset_manifest": {
-                    "unitree_urdf": "/assets/unitree/g1.urdf",
-                    "joint_map": "/assets/unitree/joint_map.yaml",
-                    "camera_extrinsics": "/assets/unitree/camera.json",
-                    "imu_extrinsics": "/assets/unitree/imu.json",
-                    "force_torque_calibration": "/assets/unitree/ft.json",
-                    "actuator_latency_profile": "/assets/unitree/latency.yaml",
-                    "joint_limit_profile": "/assets/unitree/joint_limits.yaml",
-                    "safety_watchdog_profile": "/assets/unitree/watchdog.yaml",
+                    "unitree_urdf": str(asset_root / "g1.urdf"),
+                    "joint_map": str(asset_root / "joint_map.yaml"),
+                    "camera_extrinsics": str(asset_root / "camera.json"),
+                    "imu_extrinsics": str(asset_root / "imu.json"),
+                    "force_torque_calibration": str(asset_root / "ft.json"),
+                    "actuator_latency_profile": str(asset_root / "latency.yaml"),
+                    "joint_limit_profile": str(asset_root / "joint_limits.yaml"),
+                    "safety_watchdog_profile": str(asset_root / "watchdog.yaml"),
                 },
             }
         ),
@@ -83,18 +95,21 @@ def test_scan_phase1_runtime_layouts_emits_deployment_and_runtime_packs(tmp_path
     )
     assert summary["isaac_runtime_binding"]["binding_status"] == "binding_ready"
     assert summary["isaac_runtime_binding"]["host_preflight_status"] == "preflight_blocked"
-    assert "asset::unitree_robot_description" not in summary["isaac_runtime_binding"][
-        "host_preflight_missing_components"
-    ]
-    assert "asset::whole_body_joint_map" not in summary["isaac_runtime_binding"][
-        "host_preflight_missing_components"
-    ]
-    assert "asset::joint_limit_profile" not in summary["isaac_runtime_binding"][
-        "host_preflight_missing_components"
-    ]
-    assert "asset::actuator_latency_profile" in summary["isaac_runtime_binding"][
-        "host_preflight_missing_components"
-    ]
+    missing_assets = set(
+        summary["isaac_runtime_binding"]["host_preflight_missing_components"]
+    )
+    fixture_assets = {
+        "asset::unitree_robot_description",
+        "asset::whole_body_joint_map",
+        "asset::joint_limit_profile",
+    }
+    if materialize_robot_assets:
+        assert fixture_assets.isdisjoint(missing_assets)
+    else:
+        # Declaring a path must not count as evidence that the file exists.
+        assert fixture_assets <= missing_assets
+    assert "asset::actuator_latency_profile" in missing_assets
+    assert "asset::safety_watchdog_profile" in missing_assets
     assert "unitree_sim_isaaclab" in summary["scan_summary"]["isaac"]["usable_profiles"]
     assert "unitree_sim_isaaclab" in summary["scan_summary"]["isaac"]["install_ready_profiles"]
     assert summary["scan_summary"]["isaac"]["selected_policy_ref"].endswith(
