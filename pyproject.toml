@@ -29,6 +29,11 @@ extend-exclude = [
   "*.egg-info",
 ]
 
+[tool.ruff.lint]
+# Keep the rule set used by the quality ratchet explicit. Ruff 0.16 expanded
+# its defaults; adopting additional rules requires a separate baseline review.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.ruff.lint.per-file-ignores]
 "experiments/*.py" = ["E402"]
 "experiments/**/*.py" = ["E402"]
